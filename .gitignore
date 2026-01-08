@@ -1,0 +1,98 @@
+# =========================
+# Flutter / Dart
+# =========================
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-versions
+.packages.generated
+
+# =========================
+# Flutter environment
+# =========================
+.env
+.env.*
+
+# =========================
+# Android
+# =========================
+android/.gradle/
+android/local.properties
+android/key.properties
+android/app/key.properties
+android/app/debug.keystore
+android/app/upload-keystore.jks
+android/app/*.keystore
+android/app/build/
+android/build/
+
+# =========================
+# iOS
+# =========================
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/App.framework
+ios/Flutter/engine/
+ios/Flutter/.last_build_id
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.*
+
+# =========================
+# macOS
+# =========================
+macos/Pods/
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.swift
+
+# =========================
+# Windows
+# =========================
+windows/flutter/ephemeral/
+windows/flutter/generated_plugin_registrant.*
+
+# =========================
+# Linux
+# =========================
+linux/flutter/ephemeral/
+linux/flutter/generated_plugin_registrant.*
+
+# =========================
+# Web
+# =========================
+web/.dart_tool/
+web/build/
+
+# =========================
+# IDEs
+# =========================
+# VS Code
+.vscode/
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+
+# =========================
+# Logs / cache
+# =========================
+*.log
+*.tmp
+*.swp
+
+# =========================
+# Coverage
+# =========================
+coverage/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
