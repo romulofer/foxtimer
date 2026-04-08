@@ -41,6 +41,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
 
   // To-do list
   final TextEditingController _todoController = TextEditingController();
+  final FocusNode _todoFocusNode = FocusNode();
   List<TodoItem> _todos = [];
 
   // Controllers das configurações
@@ -86,6 +87,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
     _shortBreakMinutesCtrl.dispose();
     _longBreakMinutesCtrl.dispose();
     _cyclesBeforeLongBreakCtrl.dispose();
+    _todoFocusNode.dispose();
     super.dispose();
   }
 
@@ -338,6 +340,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
     setState(() {
       _todos.add(TodoItem(title: text));
       _todoController.clear();
+      _todoFocusNode.requestFocus();
     });
 
     await _saveTodos();
@@ -437,6 +440,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
             TodoSection(
               todos: _todos,
               todoController: _todoController,
+              todoFocusNode: _todoFocusNode,
               onAddTodo: _addTodo,
               onToggleTodoDone: _toggleTodoDone,
               onRemoveTodo: _removeTodo,

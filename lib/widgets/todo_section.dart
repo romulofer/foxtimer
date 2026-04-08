@@ -7,6 +7,7 @@ class TodoSection extends StatelessWidget {
   final VoidCallback onAddTodo;
   final void Function(int index, bool? value) onToggleTodoDone;
   final void Function(int index) onRemoveTodo;
+  final FocusNode todoFocusNode;
 
   const TodoSection({
     super.key,
@@ -15,6 +16,7 @@ class TodoSection extends StatelessWidget {
     required this.onAddTodo,
     required this.onToggleTodoDone,
     required this.onRemoveTodo,
+    required this.todoFocusNode,
   });
 
   @override
@@ -32,6 +34,7 @@ class TodoSection extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: todoController,
+                focusNode: todoFocusNode,
                 decoration: const InputDecoration(
                   labelText: 'Nova tarefa',
                   border: OutlineInputBorder(),
