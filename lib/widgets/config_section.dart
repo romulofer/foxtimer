@@ -22,52 +22,90 @@ class ConfigSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
-      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Configurações do ciclo',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Icon(Icons.tune, color: colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Configurações do ciclo',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ],
             ),
             if (isRunning) ...[
               const SizedBox(height: 6),
               Text(
-                'Configurações bloqueadas enquanto o timer estiver em execução.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                'Bloqueado enquanto o timer está em execução.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
               ),
             ],
             const SizedBox(height: 16),
 
-            _buildConfigInput(
-              label: 'Foco (min)',
-              controller: workMinutesCtrl,
-              enabled: !isRunning,
+            Row(
+              children: [
+                Expanded(
+                  child: _buildConfigInput(
+                    context: context,
+                    icon: Icons.local_fire_department_outlined,
+                    label: 'Foco',
+                    controller: workMinutesCtrl,
+                    enabled: !isRunning,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildConfigInput(
+                    context: context,
+                    icon: Icons.coffee_outlined,
+                    label: 'Pausa curta',
+                    controller: shortBreakMinutesCtrl,
+                    enabled: !isRunning,
+                  ),
+                ),
+              ],
             ),
-            _buildConfigInput(
-              label: 'Pausa curta (min)',
-              controller: shortBreakMinutesCtrl,
-              enabled: !isRunning,
-            ),
-            _buildConfigInput(
-              label: 'Pausa longa (min)',
-              controller: longBreakMinutesCtrl,
-              enabled: !isRunning,
-            ),
-            _buildConfigInput(
-              label: 'Ciclos antes da pausa longa',
-              controller: cyclesBeforeLongBreakCtrl,
-              enabled: !isRunning,
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildConfigInput(
+                    context: context,
+                    icon: Icons.weekend_outlined,
+                    label: 'Pausa longa',
+                    controller: longBreakMinutesCtrl,
+                    enabled: !isRunning,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildConfigInput(
+                    context: context,
+                    icon: Icons.repeat,
+                    label: 'Ciclos',
+                    controller: cyclesBeforeLongBreakCtrl,
+                    enabled: !isRunning,
+                  ),
+                ),
+              ],
             ),
 
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
                 onPressed: isRunning ? null : onApply,
-                icon: const Icon(Icons.check),
+                icon: const Icon(Icons.check, size: 18),
                 label: const Text('Aplicar'),
               ),
             ),
@@ -78,32 +116,24 @@ class ConfigSection extends StatelessWidget {
   }
 
   Widget _buildConfigInput({
+    required BuildContext context,
+    required IconData icon,
     required String label,
     required TextEditingController controller,
     required bool enabled,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(child: Text(label)),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 80,
-            child: TextField(
-              controller: controller,
-              enabled: enabled,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  vertical: 6,
-                  horizontal: 8,
-                ),
-              ),
-            ),
-          ),
-        ],
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: TextInputType.number,
+      textAlign: TextAlign.center,
+      style: const TextStyle(fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 18, color: colorScheme.primary),
+        isDense: true,
       ),
     );
   }

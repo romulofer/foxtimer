@@ -7,18 +7,31 @@ import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/sound_option.dart';
 import '../models/todo_item.dart';
+import '../services/custom_sound_store.dart';
 import '../widgets/config_section.dart';
 import '../widgets/todo_section.dart';
+import 'settings_page.dart';
 
 class PomodoroPage extends StatefulWidget {
-  const PomodoroPage({super.key});
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  const PomodoroPage({
+    super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
 
   @override
   State<PomodoroPage> createState() => _PomodoroPageState();
 }
 
-class _PomodoroPageState extends State<PomodoroPage> {
+class _PomodoroPageState extends State<PomodoroPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
   // Configurações padrão (em minutos)
   int _workMinutes = 25;
   int _shortBreakMinutes = 5;
@@ -38,6 +51,9 @@ class _PomodoroPageState extends State<PomodoroPage> {
   AudioPlayer? _audioPlayer;
   Player? _mediaKitPlayer;
   bool _soundReady = false;
+  bool _soundEnabled = true;
+  double _soundVolume = 1.0;
+  String _selectedSoundId = defaultSoundId;
 
   // To-do list
   final TextEditingController _todoController = TextEditingController();
@@ -53,6 +69,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _remainingSeconds = _workMinutes * 60;
 
     // Initialize platform-specific audio player
@@ -73,12 +90,12 @@ class _PomodoroPageState extends State<PomodoroPage> {
       text: _cyclesBeforeLongBreak.toString(),
     );
 
-    _loadPreferencesAndTodos();
-    _initSound();
+    _loadPreferencesAndTodos().then((_) => _initSound());
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _timer?.cancel();
     _audioPlayer?.dispose();
     _mediaKitPlayer?.dispose();
@@ -95,16 +112,25 @@ class _PomodoroPageState extends State<PomodoroPage> {
   // ÁUDIO
   // ==============================
 
+  Future<void> _openSound(SoundOption sound, double volume) async {
+    if (Platform.isLinux) {
+      final uri = sound.isAsset ? 'asset:///${sound.path}' : sound.path;
+      await _mediaKitPlayer?.open(Media(uri), play: false);
+      await _mediaKitPlayer?.setVolume(volume * 100);
+    } else {
+      if (sound.isAsset) {
+        await _audioPlayer?.setAsset(sound.path);
+      } else {
+        await _audioPlayer?.setFilePath(sound.path);
+      }
+      await _audioPlayer?.setVolume(volume);
+    }
+  }
+
   Future<void> _initSound() async {
     try {
-      if (Platform.isLinux) {
-        await _mediaKitPlayer?.open(
-          Media('asset:///assets/sounds/town.wav'),
-          play: false,
-        );
-      } else {
-        await _audioPlayer?.setAsset('assets/sounds/town.wav');
-      }
+      final sound = await resolveSoundOption(_selectedSoundId);
+      await _openSound(sound, _soundVolume);
       _soundReady = true;
       debugPrint('Áudio carregado com sucesso');
     } catch (e) {
@@ -114,7 +140,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
   }
 
   Future<void> _playEndSound() async {
-    if (!_soundReady) return;
+    if (!_soundReady || !_soundEnabled) return;
     try {
       if (Platform.isLinux) {
         await _mediaKitPlayer?.seek(Duration.zero);
@@ -125,6 +151,33 @@ class _PomodoroPageState extends State<PomodoroPage> {
       }
     } catch (e) {
       debugPrint('Erro ao tocar áudio: $e');
+    }
+  }
+
+  Future<void> _stopSound() async {
+    try {
+      if (Platform.isLinux) {
+        await _mediaKitPlayer?.stop();
+      } else {
+        await _audioPlayer?.stop();
+      }
+    } catch (e) {
+      debugPrint('Erro ao parar áudio: $e');
+    }
+  }
+
+  Future<void> _playTestSound(SoundOption sound, double volume) async {
+    try {
+      await _openSound(sound, volume);
+      if (Platform.isLinux) {
+        await _mediaKitPlayer?.seek(Duration.zero);
+        await _mediaKitPlayer?.play();
+      } else {
+        await _audioPlayer?.seek(Duration.zero);
+        await _audioPlayer?.play();
+      }
+    } catch (e) {
+      debugPrint('Erro ao testar áudio: $e');
     }
   }
 
@@ -140,6 +193,10 @@ class _PomodoroPageState extends State<PomodoroPage> {
       _shortBreakMinutes = prefs.getInt('shortBreakMinutes') ?? 5;
       _longBreakMinutes = prefs.getInt('longBreakMinutes') ?? 15;
       _cyclesBeforeLongBreak = prefs.getInt('cyclesBeforeLongBreak') ?? 4;
+
+      _soundEnabled = prefs.getBool('soundEnabled') ?? true;
+      _soundVolume = prefs.getDouble('soundVolume') ?? 1.0;
+      _selectedSoundId = prefs.getString('selectedSoundId') ?? defaultSoundId;
 
       _workMinutesCtrl.text = _workMinutes.toString();
       _shortBreakMinutesCtrl.text = _shortBreakMinutes.toString();
@@ -166,6 +223,16 @@ class _PomodoroPageState extends State<PomodoroPage> {
     await prefs.setInt('shortBreakMinutes', _shortBreakMinutes);
     await prefs.setInt('longBreakMinutes', _longBreakMinutes);
     await prefs.setInt('cyclesBeforeLongBreak', _cyclesBeforeLongBreak);
+  }
+
+  Future<void> _loadSoundPreferencesAndReinit() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _soundEnabled = prefs.getBool('soundEnabled') ?? true;
+      _soundVolume = prefs.getDouble('soundVolume') ?? 1.0;
+      _selectedSoundId = prefs.getString('selectedSoundId') ?? defaultSoundId;
+    });
+    await _initSound();
   }
 
   Future<void> _saveTodos() async {
@@ -313,7 +380,11 @@ class _PomodoroPageState extends State<PomodoroPage> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(label: 'Parar som', onPressed: _stopSound),
+        ),
       );
     }
   }
@@ -364,80 +435,200 @@ class _PomodoroPageState extends State<PomodoroPage> {
   // UI
   // ==============================
 
+  int get _totalSecondsForPhase {
+    if (_isWorkTime) return _workMinutes * 60;
+    if (_isLongBreak) return _longBreakMinutes * 60;
+    return _shortBreakMinutes * 60;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     String modeText;
+    IconData modeIcon;
+    Color modeColor;
     if (_isWorkTime) {
       modeText = 'Tempo de foco';
+      modeIcon = Icons.local_fire_department;
+      modeColor = colorScheme.primary;
     } else if (_isLongBreak) {
       modeText = 'Pausa longa';
+      modeIcon = Icons.weekend;
+      modeColor = colorScheme.secondary;
     } else {
       modeText = 'Pausa curta';
+      modeIcon = Icons.coffee;
+      modeColor = colorScheme.secondary;
     }
 
+    final total = _totalSecondsForPhase;
+    final progress = total == 0 ? 0.0 : 1 - (_remainingSeconds / total);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('FoxTimer Pomodoro'), centerTitle: true),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ConfigSection(
-              isRunning: _isRunning,
-              workMinutesCtrl: _workMinutesCtrl,
-              shortBreakMinutesCtrl: _shortBreakMinutesCtrl,
-              longBreakMinutesCtrl: _longBreakMinutesCtrl,
-              cyclesBeforeLongBreakCtrl: _cyclesBeforeLongBreakCtrl,
-              onApply: _onApplyPressed,
+      appBar: AppBar(
+        title: const Text('FoxTimer Pomodoro'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Configurações',
+            onPressed: _openSettings,
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.timer), text: 'Timer'),
+            Tab(icon: Icon(Icons.checklist), text: 'Tarefas'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ConfigSection(
+                  isRunning: _isRunning,
+                  workMinutesCtrl: _workMinutesCtrl,
+                  shortBreakMinutesCtrl: _shortBreakMinutesCtrl,
+                  longBreakMinutesCtrl: _longBreakMinutesCtrl,
+                  cyclesBeforeLongBreakCtrl: _cyclesBeforeLongBreakCtrl,
+                  onApply: _onApplyPressed,
+                ),
+                const SizedBox(height: 24),
+
+                // Timer / Pomodoro
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: modeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(modeIcon, size: 18, color: modeColor),
+                            const SizedBox(width: 8),
+                            Text(
+                              modeText,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: modeColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      SizedBox(
+                        width: 240,
+                        height: 240,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 240,
+                              height: 240,
+                              child: CircularProgressIndicator(
+                                value: progress.clamp(0.0, 1.0),
+                                strokeWidth: 10,
+                                strokeCap: StrokeCap.round,
+                                backgroundColor: colorScheme.onSurface.withValues(
+                                  alpha: 0.08,
+                                ),
+                                valueColor: AlwaysStoppedAnimation(modeColor),
+                              ),
+                            ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _formatTime(_remainingSeconds),
+                                  style: const TextStyle(
+                                    fontSize: 56,
+                                    fontWeight: FontWeight.bold,
+                                    fontFeatures: [FontFeature.tabularFigures()],
+                                  ),
+                                ),
+                                Text(
+                                  _isRunning ? 'em andamento' : 'pausado',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.onSurface.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(_cyclesBeforeLongBreak, (i) {
+                          final filled =
+                              i < (_completedWorkSessions % _cyclesBeforeLongBreak) ||
+                              (_completedWorkSessions != 0 &&
+                                  _completedWorkSessions % _cyclesBeforeLongBreak == 0 &&
+                                  i < _cyclesBeforeLongBreak);
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: filled
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurface.withValues(alpha: 0.15),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 32),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton.outlined(
+                            iconSize: 22,
+                            padding: const EdgeInsets.all(14),
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Reiniciar',
+                            onPressed: _resetTimer,
+                          ),
+                          const SizedBox(width: 16),
+                          FilledButton.icon(
+                            icon: Icon(
+                              _isRunning ? Icons.pause : Icons.play_arrow,
+                            ),
+                            onPressed: _startPauseTimer,
+                            label: Text(_isRunning ? 'Pausar' : 'Iniciar'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-
-            // Timer / Pomodoro
-            Center(
-              child: Column(
-                children: [
-                  Text(
-                    modeText,
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _formatTime(_remainingSeconds),
-                    style: const TextStyle(
-                      fontSize: 70,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Ciclos de foco concluídos: $_completedWorkSessions',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow),
-                    onPressed: _startPauseTimer,
-                    label: Text(_isRunning ? 'Pausar' : 'Iniciar'),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _resetTimer,
-                    label: const Text('Reiniciar'),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 12),
-
-            TodoSection(
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: TodoSection(
               todos: _todos,
               todoController: _todoController,
               todoFocusNode: _todoFocusNode,
@@ -445,10 +636,24 @@ class _PomodoroPageState extends State<PomodoroPage> {
               onToggleTodoDone: _toggleTodoDone,
               onRemoveTodo: _removeTodo,
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SettingsPage(
+          themeMode: widget.themeMode,
+          onThemeModeChanged: widget.onThemeModeChanged,
+          onPlayTestSound: _playTestSound,
+          onStopSound: _stopSound,
         ),
       ),
     );
+    await _loadSoundPreferencesAndReinit();
   }
 
   String _formatTime(int sec) {
