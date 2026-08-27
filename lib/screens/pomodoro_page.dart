@@ -50,7 +50,6 @@ class _PomodoroPageState extends State<PomodoroPage>
   // Player de som
   AudioPlayer? _audioPlayer;
   Player? _mediaKitPlayer;
-  bool _soundReady = false;
   bool _soundEnabled = true;
   double _soundVolume = 1.0;
   String _selectedSoundId = defaultSoundId;
@@ -131,22 +130,25 @@ class _PomodoroPageState extends State<PomodoroPage>
     try {
       final sound = await resolveSoundOption(_selectedSoundId);
       await _openSound(sound, _soundVolume);
-      _soundReady = true;
       debugPrint('Áudio carregado com sucesso');
     } catch (e) {
       debugPrint('Erro ao carregar áudio: $e');
-      _soundReady = false;
     }
   }
 
+  // Reabre a mídia a partir das preferências salvas sempre antes de tocar.
+  // Não confia no player já ter uma mídia carregada: um `stop()` anterior,
+  // uma troca de som nas Configurações ou uma falha transitória de
+  // carregamento não podem deixar o som de fim de ciclo silenciosamente
+  // sem tocar.
   Future<void> _playEndSound() async {
-    if (!_soundReady || !_soundEnabled) return;
+    if (!_soundEnabled) return;
     try {
+      final sound = await resolveSoundOption(_selectedSoundId);
+      await _openSound(sound, _soundVolume);
       if (Platform.isLinux) {
-        await _mediaKitPlayer?.seek(Duration.zero);
         await _mediaKitPlayer?.play();
       } else {
-        await _audioPlayer?.seek(Duration.zero);
         await _audioPlayer?.play();
       }
     } catch (e) {
@@ -154,12 +156,19 @@ class _PomodoroPageState extends State<PomodoroPage>
     }
   }
 
+  // pause()+seek(0) em vez de stop(): o stop() do media_kit roda
+  // playlist-clear e descarrega a mídia carregada, então uma chamada
+  // concorrente com o reload de som (ex.: SettingsPage.dispose() disparando
+  // isso sem esperar, ao mesmo tempo que _loadSoundPreferencesAndReinit
+  // reabre o som) podia deixar o próximo fim de ciclo sem áudio.
   Future<void> _stopSound() async {
     try {
       if (Platform.isLinux) {
-        await _mediaKitPlayer?.stop();
+        await _mediaKitPlayer?.pause();
+        await _mediaKitPlayer?.seek(Duration.zero);
       } else {
-        await _audioPlayer?.stop();
+        await _audioPlayer?.pause();
+        await _audioPlayer?.seek(Duration.zero);
       }
     } catch (e) {
       debugPrint('Erro ao parar áudio: $e');
@@ -170,10 +179,8 @@ class _PomodoroPageState extends State<PomodoroPage>
     try {
       await _openSound(sound, volume);
       if (Platform.isLinux) {
-        await _mediaKitPlayer?.seek(Duration.zero);
         await _mediaKitPlayer?.play();
       } else {
-        await _audioPlayer?.seek(Duration.zero);
         await _audioPlayer?.play();
       }
     } catch (e) {
