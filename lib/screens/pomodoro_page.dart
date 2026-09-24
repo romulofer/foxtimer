@@ -39,7 +39,10 @@ class _PomodoroPageState extends State<PomodoroPage>
   int _cyclesBeforeLongBreak = 4;
 
   // Estado interno do Pomodoro
-  int _remainingSeconds = 0;
+  // Segundos restantes ficam num ValueNotifier para que o tick de 1s reconstrua
+  // apenas o cronômetro (via ValueListenableBuilder), e não a página inteira
+  // (ConfigSection + lista de tarefas), o que deixava a troca de abas lenta.
+  final ValueNotifier<int> _remainingSeconds = ValueNotifier<int>(0);
   bool _isRunning = false;
   bool _isWorkTime = true;
   bool _isLongBreak = false;
@@ -69,7 +72,7 @@ class _PomodoroPageState extends State<PomodoroPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _remainingSeconds = _workMinutes * 60;
+    _remainingSeconds.value = _workMinutes * 60;
 
     // Initialize platform-specific audio player
     if (Platform.isLinux) {
@@ -104,6 +107,7 @@ class _PomodoroPageState extends State<PomodoroPage>
     _longBreakMinutesCtrl.dispose();
     _cyclesBeforeLongBreakCtrl.dispose();
     _todoFocusNode.dispose();
+    _remainingSeconds.dispose();
     super.dispose();
   }
 
@@ -250,11 +254,11 @@ class _PomodoroPageState extends State<PomodoroPage>
 
   void _applyDurationsToCurrentPhase() {
     if (_isWorkTime) {
-      _remainingSeconds = _workMinutes * 60;
+      _remainingSeconds.value = _workMinutes * 60;
     } else if (_isLongBreak) {
-      _remainingSeconds = _longBreakMinutes * 60;
+      _remainingSeconds.value = _longBreakMinutes * 60;
     } else {
-      _remainingSeconds = _shortBreakMinutes * 60;
+      _remainingSeconds.value = _shortBreakMinutes * 60;
     }
   }
 
@@ -333,8 +337,9 @@ class _PomodoroPageState extends State<PomodoroPage>
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingSeconds > 0) {
-        setState(() => _remainingSeconds--);
+      if (_remainingSeconds.value > 0) {
+        // Notifier update rebuilds only the countdown, not the whole page.
+        _remainingSeconds.value--;
       } else {
         _timer?.cancel();
         _onTimerFinished();
@@ -365,19 +370,19 @@ class _PomodoroPageState extends State<PomodoroPage>
         if (_completedWorkSessions % _cyclesBeforeLongBreak == 0) {
           _isWorkTime = false;
           _isLongBreak = true;
-          _remainingSeconds = _longBreakMinutes * 60;
+          _remainingSeconds.value = _longBreakMinutes * 60;
           message = 'Pausa longa! Descanse bastante.';
         } else {
           _isWorkTime = false;
           _isLongBreak = false;
-          _remainingSeconds = _shortBreakMinutes * 60;
+          _remainingSeconds.value = _shortBreakMinutes * 60;
           message = 'Pausa curta! Descanse bastante.';
         }
       } else {
         // Terminou pausa → volta ao foco
         _isWorkTime = true;
         _isLongBreak = false;
-        _remainingSeconds = _workMinutes * 60;
+        _remainingSeconds.value = _workMinutes * 60;
         message = 'Hora de focar novamente!';
       }
     });
@@ -402,7 +407,7 @@ class _PomodoroPageState extends State<PomodoroPage>
       _isRunning = false;
       _isWorkTime = true;
       _isLongBreak = false;
-      _remainingSeconds = _workMinutes * 60;
+      _remainingSeconds.value = _workMinutes * 60;
       _completedWorkSessions = 0;
     });
   }
@@ -480,7 +485,6 @@ class _PomodoroPageState extends State<PomodoroPage>
     }
 
     final total = _totalSecondsForPhase;
-    final progress = total == 0 ? 0.0 : 1 - (_remainingSeconds / total);
 
     return Scaffold(
       appBar: AppBar(
@@ -555,29 +559,42 @@ class _PomodoroPageState extends State<PomodoroPage>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            SizedBox(
-                              width: 240,
-                              height: 240,
-                              child: CircularProgressIndicator(
-                                value: progress.clamp(0.0, 1.0),
-                                strokeWidth: 10,
-                                strokeCap: StrokeCap.round,
-                                backgroundColor: colorScheme.onSurface
-                                    .withValues(alpha: 0.08),
-                                valueColor: AlwaysStoppedAnimation(modeColor),
-                              ),
+                            ValueListenableBuilder<int>(
+                              valueListenable: _remainingSeconds,
+                              builder: (context, remaining, _) {
+                                final progress = total == 0
+                                    ? 0.0
+                                    : 1 - (remaining / total);
+                                return SizedBox(
+                                  width: 240,
+                                  height: 240,
+                                  child: CircularProgressIndicator(
+                                    value: progress.clamp(0.0, 1.0),
+                                    strokeWidth: 10,
+                                    strokeCap: StrokeCap.round,
+                                    backgroundColor: colorScheme.onSurface
+                                        .withValues(alpha: 0.08),
+                                    valueColor: AlwaysStoppedAnimation(
+                                      modeColor,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                             Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  _formatTime(_remainingSeconds),
-                                  style: const TextStyle(
-                                    fontSize: 56,
-                                    fontWeight: FontWeight.bold,
-                                    fontFeatures: [
-                                      FontFeature.tabularFigures(),
-                                    ],
+                                ValueListenableBuilder<int>(
+                                  valueListenable: _remainingSeconds,
+                                  builder: (context, remaining, _) => Text(
+                                    _formatTime(remaining),
+                                    style: const TextStyle(
+                                      fontSize: 56,
+                                      fontWeight: FontWeight.bold,
+                                      fontFeatures: [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 Text(

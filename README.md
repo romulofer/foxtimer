@@ -91,7 +91,7 @@ bash package_deb.sh
 ### Installing the .deb
 
 ```bash
-sudo dpkg -i foxtimer_1.3.4_amd64.deb
+sudo dpkg -i foxtimer_1.3.5_amd64.deb
 # Fix any missing dependencies:
 sudo apt-get install -f
 ```
