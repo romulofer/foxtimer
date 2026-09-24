@@ -139,6 +139,64 @@ void main() {
     expect(removed, [0]);
   });
 
+  testWidgets('completed todos are grouped after pending ones', (tester) async {
+    final todos = [
+      TodoItem(title: 'A concluída', done: true),
+      TodoItem(title: 'B pendente'),
+      TodoItem(title: 'C concluída', done: true),
+      TodoItem(title: 'D pendente'),
+    ];
+
+    await tester.pumpWidget(
+      _wrap(
+        TodoSection(
+          todos: todos,
+          todoController: TextEditingController(),
+          todoFocusNode: FocusNode(),
+          onAddTodo: () {},
+          onToggleTodoDone: (_, __) {},
+          onEditTodo: (_, __) {},
+          onRemoveTodo: (_) {},
+        ),
+      ),
+    );
+
+    // Pending first (in original order), then completed (in original order).
+    double dy(String text) => tester.getTopLeft(find.text(text)).dy;
+    expect(dy('B pendente'), lessThan(dy('D pendente')));
+    expect(dy('D pendente'), lessThan(dy('A concluída')));
+    expect(dy('A concluída'), lessThan(dy('C concluída')));
+  });
+
+  testWidgets('callbacks target the original index after reordering', (
+    tester,
+  ) async {
+    final toggled = <(int, bool?)>[];
+    final todos = [
+      TodoItem(title: 'A concluída', done: true),
+      TodoItem(title: 'B pendente'),
+    ];
+
+    await tester.pumpWidget(
+      _wrap(
+        TodoSection(
+          todos: todos,
+          todoController: TextEditingController(),
+          todoFocusNode: FocusNode(),
+          onAddTodo: () {},
+          onToggleTodoDone: (i, v) => toggled.add((i, v)),
+          onEditTodo: (_, __) {},
+          onRemoveTodo: (_) {},
+        ),
+      ),
+    );
+
+    // 'B pendente' renders first but is index 1 in the original list.
+    await tester.tap(find.text('B pendente'));
+    await tester.pump();
+    expect(toggled, [(1, true)]);
+  });
+
   testWidgets('editing a todo pre-fills the dialog and reports the new title', (
     tester,
   ) async {

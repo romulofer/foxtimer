@@ -84,6 +84,15 @@ class TodoSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    // Show pending tasks first, then completed ones at the end. Preserve each
+    // task's original index so the callbacks still target the right item.
+    final orderedIndices = <int>[
+      for (var i = 0; i < todos.length; i++)
+        if (!todos[i].done) i,
+      for (var i = 0; i < todos.length; i++)
+        if (todos[i].done) i,
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -165,10 +174,11 @@ class TodoSection extends StatelessWidget {
             itemCount: todos.length,
             separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
-              final todo = todos[index];
+              final originalIndex = orderedIndices[index];
+              final todo = todos[originalIndex];
               return Card(
                 child: ListTile(
-                  onTap: () => onToggleTodoDone(index, !todo.done),
+                  onTap: () => onToggleTodoDone(originalIndex, !todo.done),
                   leading: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     width: 26,
@@ -208,7 +218,7 @@ class TodoSection extends StatelessWidget {
                           color: colorScheme.onSurface.withValues(alpha: 0.4),
                         ),
                         tooltip: 'Editar tarefa',
-                        onPressed: () => _showEditDialog(context, index),
+                        onPressed: () => _showEditDialog(context, originalIndex),
                       ),
                       IconButton(
                         icon: Icon(
@@ -216,7 +226,7 @@ class TodoSection extends StatelessWidget {
                           color: colorScheme.onSurface.withValues(alpha: 0.4),
                         ),
                         tooltip: 'Remover tarefa',
-                        onPressed: () => onRemoveTodo(index),
+                        onPressed: () => onRemoveTodo(originalIndex),
                       ),
                     ],
                   ),
