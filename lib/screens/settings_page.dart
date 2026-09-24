@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/sound_option.dart';
@@ -34,6 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _playingSoundId;
   bool _importing = false;
   bool _loading = true;
+  String _appVersion = '';
 
   List<SoundOption> get _allSounds => [...bundledSounds, ..._customSounds];
 
@@ -53,11 +55,18 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final customSounds = await _customSoundStore.loadAll();
+    String version = '';
+    try {
+      version = (await PackageInfo.fromPlatform()).version;
+    } catch (_) {
+      // Version label is non-critical; ignore lookup failures.
+    }
     setState(() {
       _soundEnabled = prefs.getBool('soundEnabled') ?? true;
       _soundVolume = prefs.getDouble('soundVolume') ?? 1.0;
       _selectedSoundId = prefs.getString('selectedSoundId') ?? defaultSoundId;
       _customSounds = customSounds;
+      _appVersion = version;
       _loading = false;
     });
   }
@@ -101,9 +110,9 @@ class _SettingsPageState extends State<SettingsPage> {
       await _saveSoundPreferences();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao importar som: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Erro ao importar som: $e')));
       }
     } finally {
       if (mounted) setState(() => _importing = false);
@@ -258,8 +267,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       onPressed: !_soundEnabled
                           ? null
                           : () => _playingSoundId == sound.id
-                              ? _stopSound()
-                              : _playSound(sound),
+                                ? _stopSound()
+                                : _playSound(sound),
                     ),
                     if (sound.isCustom)
                       IconButton(
@@ -285,6 +294,20 @@ class _SettingsPageState extends State<SettingsPage> {
               _importing ? 'Importando...' : 'Adicionar som personalizado',
             ),
           ),
+
+          if (_appVersion.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Versão $_appVersion',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

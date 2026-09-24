@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:foxtimer/models/sound_option.dart';
@@ -37,6 +38,13 @@ Widget _wrap(_Recorder r, {ThemeMode themeMode = ThemeMode.system}) {
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    PackageInfo.setMockInitialValues(
+      appName: 'foxtimer',
+      packageName: 'com.example.foxtimer',
+      version: '1.3.4',
+      buildNumber: '8',
+      buildSignature: '',
+    );
   });
 
   testWidgets('loads and shows theme options plus the default sound', (
@@ -50,6 +58,14 @@ void main() {
     expect(find.text('Claro'), findsOneWidget);
     expect(find.text('Escuro'), findsOneWidget);
     expect(find.text(bundledSounds.first.label), findsOneWidget);
+  });
+
+  testWidgets('shows the app version', (tester) async {
+    final r = _Recorder();
+    await tester.pumpWidget(_wrap(r));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Versão 1.3.4'), findsOneWidget);
   });
 
   testWidgets('selecting a theme segment calls onThemeModeChanged', (

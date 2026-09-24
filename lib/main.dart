@@ -85,7 +85,10 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-ThemeData _buildTheme(ColorScheme colorScheme, {required Color scaffoldBackground}) {
+ThemeData _buildTheme(
+  ColorScheme colorScheme, {
+  required Color scaffoldBackground,
+}) {
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
@@ -164,13 +167,6 @@ ThemeData _buildTheme(ColorScheme colorScheme, {required Color scaffoldBackgroun
     ),
     listTileTheme: ListTileThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    ),
-    switchTheme: SwitchThemeData(
-      thumbColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected)
-            ? colorScheme.primary
-            : null,
-      ),
     ),
   );
 }

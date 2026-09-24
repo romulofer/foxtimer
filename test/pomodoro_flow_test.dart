@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:foxtimer/main.dart';
@@ -32,6 +33,13 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    PackageInfo.setMockInitialValues(
+      appName: 'foxtimer',
+      packageName: 'com.example.foxtimer',
+      version: '1.3.4',
+      buildNumber: '8',
+      buildSignature: '',
+    );
   });
 
   Future<void> setLargeSurface(WidgetTester tester) async {

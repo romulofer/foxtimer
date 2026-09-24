@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/sound_option.dart';
@@ -60,9 +59,6 @@ class _PomodoroPageState extends State<PomodoroPage>
   final FocusNode _todoFocusNode = FocusNode();
   List<TodoItem> _todos = [];
 
-  // App version shown in the footer.
-  String _appVersion = '';
-
   // Controllers das configurações
   late final TextEditingController _workMinutesCtrl;
   late final TextEditingController _shortBreakMinutesCtrl;
@@ -94,18 +90,6 @@ class _PomodoroPageState extends State<PomodoroPage>
     );
 
     _loadPreferencesAndTodos().then((_) => _initSound());
-    _loadAppVersion();
-  }
-
-  Future<void> _loadAppVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (mounted) {
-        setState(() => _appVersion = info.version);
-      }
-    } catch (_) {
-      // Version footer is non-critical; ignore lookup failures.
-    }
   }
 
   @override
@@ -517,11 +501,9 @@ class _PomodoroPageState extends State<PomodoroPage>
           ],
         ),
       ),
-      body: Stack(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          TabBarView(
-            controller: _tabController,
-            children: [
           SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -580,9 +562,8 @@ class _PomodoroPageState extends State<PomodoroPage>
                                 value: progress.clamp(0.0, 1.0),
                                 strokeWidth: 10,
                                 strokeCap: StrokeCap.round,
-                                backgroundColor: colorScheme.onSurface.withValues(
-                                  alpha: 0.08,
-                                ),
+                                backgroundColor: colorScheme.onSurface
+                                    .withValues(alpha: 0.08),
                                 valueColor: AlwaysStoppedAnimation(modeColor),
                               ),
                             ),
@@ -594,7 +575,9 @@ class _PomodoroPageState extends State<PomodoroPage>
                                   style: const TextStyle(
                                     fontSize: 56,
                                     fontWeight: FontWeight.bold,
-                                    fontFeatures: [FontFeature.tabularFigures()],
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
                                 Text(
@@ -617,9 +600,13 @@ class _PomodoroPageState extends State<PomodoroPage>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(_cyclesBeforeLongBreak, (i) {
                           final filled =
-                              i < (_completedWorkSessions % _cyclesBeforeLongBreak) ||
+                              i <
+                                  (_completedWorkSessions %
+                                      _cyclesBeforeLongBreak) ||
                               (_completedWorkSessions != 0 &&
-                                  _completedWorkSessions % _cyclesBeforeLongBreak == 0 &&
+                                  _completedWorkSessions %
+                                          _cyclesBeforeLongBreak ==
+                                      0 &&
                                   i < _cyclesBeforeLongBreak);
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -629,7 +616,9 @@ class _PomodoroPageState extends State<PomodoroPage>
                               shape: BoxShape.circle,
                               color: filled
                                   ? colorScheme.primary
-                                  : colorScheme.onSurface.withValues(alpha: 0.15),
+                                  : colorScheme.onSurface.withValues(
+                                      alpha: 0.15,
+                                    ),
                             ),
                           );
                         }),
@@ -673,22 +662,6 @@ class _PomodoroPageState extends State<PomodoroPage>
               onRemoveTodo: _removeTodo,
             ),
           ),
-            ],
-          ),
-          if (_appVersion.isNotEmpty)
-            Positioned(
-              right: 12,
-              bottom: 8,
-              child: IgnorePointer(
-                child: Text(
-                  'v$_appVersion',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
