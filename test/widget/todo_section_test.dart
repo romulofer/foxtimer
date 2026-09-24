@@ -19,6 +19,7 @@ void main() {
           todoFocusNode: FocusNode(),
           onAddTodo: () {},
           onToggleTodoDone: (_, __) {},
+          onEditTodo: (_, __) {},
           onRemoveTodo: (_) {},
         ),
       ),
@@ -43,6 +44,7 @@ void main() {
           todoFocusNode: FocusNode(),
           onAddTodo: () {},
           onToggleTodoDone: (_, __) {},
+          onEditTodo: (_, __) {},
           onRemoveTodo: (_) {},
         ),
       ),
@@ -70,6 +72,7 @@ void main() {
           todoFocusNode: FocusNode(),
           onAddTodo: () => addCount++,
           onToggleTodoDone: (_, __) {},
+          onEditTodo: (_, __) {},
           onRemoveTodo: (_) {},
         ),
       ),
@@ -93,6 +96,7 @@ void main() {
           todoFocusNode: FocusNode(),
           onAddTodo: () => addCount++,
           onToggleTodoDone: (_, __) {},
+          onEditTodo: (_, __) {},
           onRemoveTodo: (_) {},
         ),
       ),
@@ -120,6 +124,7 @@ void main() {
           todoFocusNode: FocusNode(),
           onAddTodo: () {},
           onToggleTodoDone: (i, v) => toggled.add((i, v)),
+          onEditTodo: (_, __) {},
           onRemoveTodo: (i) => removed.add(i),
         ),
       ),
@@ -132,5 +137,105 @@ void main() {
     await tester.tap(find.byIcon(Icons.delete_outline));
     await tester.pump();
     expect(removed, [0]);
+  });
+
+  testWidgets('editing a todo pre-fills the dialog and reports the new title', (
+    tester,
+  ) async {
+    final edited = <(int, String)>[];
+    final todos = [TodoItem(title: 'Título antigo')];
+
+    await tester.pumpWidget(
+      _wrap(
+        TodoSection(
+          todos: todos,
+          todoController: TextEditingController(),
+          todoFocusNode: FocusNode(),
+          onAddTodo: () {},
+          onToggleTodoDone: (_, __) {},
+          onEditTodo: (i, t) => edited.add((i, t)),
+          onRemoveTodo: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editar tarefa'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Título antigo'), findsOneWidget);
+
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      'Título novo',
+    );
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(edited, [(0, 'Título novo')]);
+  });
+
+  testWidgets('cancelling the edit dialog does not report a change', (
+    tester,
+  ) async {
+    final edited = <(int, String)>[];
+    final todos = [TodoItem(title: 'Inalterado')];
+
+    await tester.pumpWidget(
+      _wrap(
+        TodoSection(
+          todos: todos,
+          todoController: TextEditingController(),
+          todoFocusNode: FocusNode(),
+          onAddTodo: () {},
+          onToggleTodoDone: (_, __) {},
+          onEditTodo: (i, t) => edited.add((i, t)),
+          onRemoveTodo: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      'Descartado',
+    );
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(edited, isEmpty);
+  });
+
+  testWidgets('editing to an empty title reports no change', (tester) async {
+    final edited = <(int, String)>[];
+    final todos = [TodoItem(title: 'Mantém')];
+
+    await tester.pumpWidget(
+      _wrap(
+        TodoSection(
+          todos: todos,
+          todoController: TextEditingController(),
+          todoFocusNode: FocusNode(),
+          onAddTodo: () {},
+          onToggleTodoDone: (_, __) {},
+          onEditTodo: (i, t) => edited.add((i, t)),
+          onRemoveTodo: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      '   ',
+    );
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(edited, isEmpty);
   });
 }

@@ -431,6 +431,16 @@ class _PomodoroPageState extends State<PomodoroPage>
     await _saveTodos();
   }
 
+  Future<void> _editTodo(int index, String newTitle) async {
+    final text = newTitle.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _todos[index].title = text;
+    });
+    await _saveTodos();
+  }
+
   Future<void> _removeTodo(int index) async {
     setState(() {
       _todos.removeAt(index);
@@ -641,6 +651,7 @@ class _PomodoroPageState extends State<PomodoroPage>
               todoFocusNode: _todoFocusNode,
               onAddTodo: _addTodo,
               onToggleTodoDone: _toggleTodoDone,
+              onEditTodo: _editTodo,
               onRemoveTodo: _removeTodo,
             ),
           ),

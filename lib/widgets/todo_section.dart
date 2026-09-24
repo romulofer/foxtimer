@@ -1,11 +1,60 @@
 import 'package:flutter/material.dart';
 import '../models/todo_item.dart';
 
+class _EditTodoDialog extends StatefulWidget {
+  final String initial;
+
+  const _EditTodoDialog({required this.initial});
+
+  @override
+  State<_EditTodoDialog> createState() => _EditTodoDialogState();
+}
+
+class _EditTodoDialogState extends State<_EditTodoDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initial);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar tarefa'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: 'O que precisa ser feito?'),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Salvar'),
+        ),
+      ],
+    );
+  }
+}
+
 class TodoSection extends StatelessWidget {
   final List<TodoItem> todos;
   final TextEditingController todoController;
   final VoidCallback onAddTodo;
   final void Function(int index, bool? value) onToggleTodoDone;
+  final void Function(int index, String newTitle) onEditTodo;
   final void Function(int index) onRemoveTodo;
   final FocusNode todoFocusNode;
 
@@ -15,9 +64,21 @@ class TodoSection extends StatelessWidget {
     required this.todoController,
     required this.onAddTodo,
     required this.onToggleTodoDone,
+    required this.onEditTodo,
     required this.onRemoveTodo,
     required this.todoFocusNode,
   });
+
+  Future<void> _showEditDialog(BuildContext context, int index) async {
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _EditTodoDialog(initial: todos[index].title),
+    );
+
+    if (newTitle != null && newTitle.trim().isNotEmpty) {
+      onEditTodo(index, newTitle);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -138,12 +199,26 @@ class TodoSection extends StatelessWidget {
                           : colorScheme.onSurface,
                     ),
                   ),
-                  trailing: IconButton(
-                    icon: Icon(
-                      Icons.delete_outline,
-                      color: colorScheme.onSurface.withValues(alpha: 0.4),
-                    ),
-                    onPressed: () => onRemoveTodo(index),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.edit_outlined,
+                          color: colorScheme.onSurface.withValues(alpha: 0.4),
+                        ),
+                        tooltip: 'Editar tarefa',
+                        onPressed: () => _showEditDialog(context, index),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: colorScheme.onSurface.withValues(alpha: 0.4),
+                        ),
+                        tooltip: 'Remover tarefa',
+                        onPressed: () => onRemoveTodo(index),
+                      ),
+                    ],
                   ),
                 ),
               );
