@@ -70,87 +70,28 @@ flutter build web --release       # Web
 
 ## Packaging as a .deb (Linux)
 
-After running `flutter build linux --release`, use the script below to produce a Debian package. No extra tools beyond `dpkg-deb` are needed.
+After running `flutter build linux --release`, use the bundled
+[`package_deb.sh`](package_deb.sh) script to produce a Debian package. It needs
+`dpkg-deb` and ImageMagick (`convert`).
 
-```bash
-#!/bin/bash
-set -e
-
-BUNDLE="build/linux/x64/release/bundle"
-VERSION="1.2.0"
-ARCH="amd64"
-DEB_ROOT="/tmp/foxtimer_deb"
-
-# 1. Create package directory tree
-rm -rf "$DEB_ROOT"
-mkdir -p "$DEB_ROOT/usr/bin"
-mkdir -p "$DEB_ROOT/usr/lib/foxtimer/lib"
-mkdir -p "$DEB_ROOT/usr/lib/foxtimer/data"
-mkdir -p "$DEB_ROOT/usr/share/applications"
-mkdir -p "$DEB_ROOT/usr/share/pixmaps"
-mkdir -p "$DEB_ROOT/DEBIAN"
-
-# 2. Copy bundle contents
-cp    "$BUNDLE/foxtimer"    "$DEB_ROOT/usr/lib/foxtimer/foxtimer"
-chmod 755                   "$DEB_ROOT/usr/lib/foxtimer/foxtimer"
-cp -r "$BUNDLE/lib/."       "$DEB_ROOT/usr/lib/foxtimer/lib/"
-cp -r "$BUNDLE/data/."      "$DEB_ROOT/usr/lib/foxtimer/data/"
-
-# 3. Launcher wrapper (ensures correct working directory for relative paths)
-cat > "$DEB_ROOT/usr/bin/foxtimer" << 'EOF'
-#!/bin/sh
-cd /usr/lib/foxtimer
-exec ./foxtimer "$@"
-EOF
-chmod 755 "$DEB_ROOT/usr/bin/foxtimer"
-
-# 4. Desktop entry
-cat > "$DEB_ROOT/usr/share/applications/foxtimer.desktop" << 'EOF'
-[Desktop Entry]
-Name=FoxTimer
-Comment=A Simple Pomodoro App
-Exec=foxtimer
-Icon=foxtimer
-Terminal=false
-Type=Application
-Categories=Utility;
-EOF
-
-# 5. App icon
-cp icon.png "$DEB_ROOT/usr/share/pixmaps/foxtimer.png"
-
-# 6. DEBIAN/control
-INSTALLED_SIZE=$(du -sk "$DEB_ROOT" | cut -f1)
-cat > "$DEB_ROOT/DEBIAN/control" << EOF
-Package: foxtimer
-Version: $VERSION
-Architecture: $ARCH
-Maintainer: Romulo
-Installed-Size: $INSTALLED_SIZE
-Depends: libgtk-3-0, libblkid1, liblzma5
-Section: utils
-Priority: optional
-Description: FoxTimer - A Simple Pomodoro App
- A cross-platform Pomodoro timer application built with Flutter.
-EOF
-
-# 7. Build the package
-dpkg-deb --build --root-owner-group "$DEB_ROOT" \
-  "foxtimer_${VERSION}_${ARCH}.deb"
-
-echo "Done: foxtimer_${VERSION}_${ARCH}.deb"
-```
+The script installs the desktop entry, the `StartupWMClass` and the themed icon
+all named after `APPLICATION_ID` (`com.example.foxtimer`), which must match the
+value in `linux/CMakeLists.txt`. This is what lets the taskbar and alt-tab
+window switcher associate the running window with the app icon — a plain
+`foxtimer.desktop` name does not match the window's `WM_CLASS`/app-id and leaves
+the window iconless.
 
 Run it from the project root:
 
 ```bash
+flutter build linux --release
 bash package_deb.sh
 ```
 
 ### Installing the .deb
 
 ```bash
-sudo dpkg -i foxtimer_1.2.0_amd64.deb
+sudo dpkg -i foxtimer_1.3.1_amd64.deb
 # Fix any missing dependencies:
 sudo apt-get install -f
 ```
