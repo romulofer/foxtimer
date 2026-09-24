@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/sound_option.dart';
@@ -59,6 +60,9 @@ class _PomodoroPageState extends State<PomodoroPage>
   final FocusNode _todoFocusNode = FocusNode();
   List<TodoItem> _todos = [];
 
+  // App version shown in the footer.
+  String _appVersion = '';
+
   // Controllers das configurações
   late final TextEditingController _workMinutesCtrl;
   late final TextEditingController _shortBreakMinutesCtrl;
@@ -90,6 +94,18 @@ class _PomodoroPageState extends State<PomodoroPage>
     );
 
     _loadPreferencesAndTodos().then((_) => _initSound());
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() => _appVersion = info.version);
+      }
+    } catch (_) {
+      // Version footer is non-critical; ignore lookup failures.
+    }
   }
 
   @override
@@ -501,9 +517,11 @@ class _PomodoroPageState extends State<PomodoroPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Stack(
         children: [
+          TabBarView(
+            controller: _tabController,
+            children: [
           SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -655,6 +673,22 @@ class _PomodoroPageState extends State<PomodoroPage>
               onRemoveTodo: _removeTodo,
             ),
           ),
+            ],
+          ),
+          if (_appVersion.isNotEmpty)
+            Positioned(
+              right: 12,
+              bottom: 8,
+              child: IgnorePointer(
+                child: Text(
+                  'v$_appVersion',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

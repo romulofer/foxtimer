@@ -176,15 +176,21 @@ class _SettingsPageState extends State<SettingsPage> {
             'Som',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Som ao fim do ciclo'),
-            value: _soundEnabled,
-            onChanged: (value) {
-              setState(() => _soundEnabled = value);
-              _saveSoundPreferences();
-              if (!value) _stopSound();
-            },
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                const Expanded(child: Text('Som ao fim do ciclo')),
+                Switch(
+                  value: _soundEnabled,
+                  onChanged: (value) {
+                    setState(() => _soundEnabled = value);
+                    _saveSoundPreferences();
+                    if (!value) _stopSound();
+                  },
+                ),
+              ],
+            ),
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,

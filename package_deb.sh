@@ -5,7 +5,7 @@ set -e
 # Run `flutter build linux --release` first, then run this from the project root.
 
 BUNDLE="build/linux/x64/release/bundle"
-VERSION="1.3.1"
+VERSION="1.3.2"
 ARCH="amd64"
 # Must match APPLICATION_ID in linux/CMakeLists.txt. The desktop file, the
 # themed icon and StartupWMClass are all named after it so the desktop
