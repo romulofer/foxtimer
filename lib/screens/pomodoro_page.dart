@@ -505,9 +505,11 @@ class _PomodoroPageState extends State<PomodoroPage>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
+      body: AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, _) => IndexedStack(
+          index: _tabController.index,
+          children: [
           SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -680,6 +682,7 @@ class _PomodoroPageState extends State<PomodoroPage>
             ),
           ),
         ],
+        ),
       ),
     );
   }

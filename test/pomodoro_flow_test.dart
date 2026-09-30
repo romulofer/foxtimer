@@ -36,7 +36,7 @@ void main() {
     PackageInfo.setMockInitialValues(
       appName: 'foxtimer',
       packageName: 'com.example.foxtimer',
-      version: '1.3.4',
+      version: '1.4.0',
       buildNumber: '8',
       buildSignature: '',
     );
@@ -139,6 +139,73 @@ void main() {
 
     expect(find.text('O que precisa ser feito?'), findsOneWidget);
   });
+
+  testWidgets(
+    'timer keeps ticking while on Tarefas tab (IndexedStack keeps both alive)',
+    (tester) async {
+      await setLargeSurface(tester);
+      await tester.pumpWidget(const MyApp());
+      await tester.pump();
+
+      await _setConfig(
+        tester,
+        work: '1',
+        shortBreak: '1',
+        longBreak: '1',
+        cycles: '2',
+      );
+
+      await tester.tap(find.text('Iniciar'));
+      await tester.pump();
+
+      // Advance 10 s on the Timer tab (t=0 → t=10, 10 ticks, remaining=50)
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.text('00:50'), findsOneWidget);
+
+      // Switch to Tarefas — use fixed pump to avoid pumpAndSettle advancing
+      // fake-async past a 1-s timer boundary (tab animation is ~300 ms)
+      await tester.tap(find.text('Tarefas'));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      // Advance 10 more seconds while on Tarefas tab (t=10.4 → t=20.4, 10 ticks)
+      await tester.pump(const Duration(seconds: 10));
+
+      // Switch back to Timer; total 20 ticks → remaining=40
+      await tester.tap(find.text('Timer'));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('00:40'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'switching tabs multiple times preserves timer state',
+    (tester) async {
+      await setLargeSurface(tester);
+      await tester.pumpWidget(const MyApp());
+      await tester.pump();
+
+      await _setConfig(
+        tester,
+        work: '1',
+        shortBreak: '1',
+        longBreak: '1',
+        cycles: '2',
+      );
+
+      // Switch back and forth 5 times without starting timer
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(find.text('Tarefas'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Timer'));
+        await tester.pumpAndSettle();
+      }
+
+      // Timer state unchanged
+      expect(find.text('01:00'), findsOneWidget);
+      expect(find.text('Iniciar'), findsOneWidget);
+    },
+  );
 
   testWidgets('opening settings and navigating back returns to the timer', (
     tester,

@@ -41,7 +41,7 @@ void main() {
     PackageInfo.setMockInitialValues(
       appName: 'foxtimer',
       packageName: 'com.example.foxtimer',
-      version: '1.3.4',
+      version: '1.4.0',
       buildNumber: '8',
       buildSignature: '',
     );
@@ -65,7 +65,7 @@ void main() {
     await tester.pumpWidget(_wrap(r));
     await tester.pumpAndSettle();
 
-    expect(find.text('Versão 1.3.4'), findsOneWidget);
+    expect(find.text('Versão 1.4.0'), findsOneWidget);
   });
 
   testWidgets('selecting a theme segment calls onThemeModeChanged', (
