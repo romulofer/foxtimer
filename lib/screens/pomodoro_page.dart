@@ -71,7 +71,7 @@ class _PomodoroPageState extends State<PomodoroPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, animationDuration: Duration.zero);
     _remainingSeconds.value = _workMinutes * 60;
 
     // Initialize platform-specific audio player
@@ -499,6 +499,7 @@ class _PomodoroPageState extends State<PomodoroPage>
         ],
         bottom: TabBar(
           controller: _tabController,
+
           tabs: const [
             Tab(icon: Icon(Icons.timer), text: 'Timer'),
             Tab(icon: Icon(Icons.checklist), text: 'Tarefas'),
