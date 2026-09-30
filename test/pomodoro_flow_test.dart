@@ -132,12 +132,14 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
-    expect(find.text('O que precisa ser feito?'), findsNothing);
+    // Both tabs pre-rendered. The add-todo button sits behind IgnorePointer
+    // while the Timer tab is active — not interactable until tab switches.
+    expect(find.byIcon(Icons.add).hitTestable(), findsNothing);
 
-    await tester.tap(find.text('Tarefas'));
+    await tester.tap(find.widgetWithText(Tab, 'Tarefas'));
     await tester.pumpAndSettle();
 
-    expect(find.text('O que precisa ser feito?'), findsOneWidget);
+    expect(find.byIcon(Icons.add).hitTestable(), findsOneWidget);
   });
 
   testWidgets(
@@ -164,14 +166,14 @@ void main() {
 
       // Switch to Tarefas — use fixed pump to avoid pumpAndSettle advancing
       // fake-async past a 1-s timer boundary (tab animation is ~300 ms)
-      await tester.tap(find.text('Tarefas'));
+      await tester.tap(find.widgetWithText(Tab, 'Tarefas'));
       await tester.pump(const Duration(milliseconds: 400));
 
       // Advance 10 more seconds while on Tarefas tab (t=10.4 → t=20.4, 10 ticks)
       await tester.pump(const Duration(seconds: 10));
 
       // Switch back to Timer; total 20 ticks → remaining=40
-      await tester.tap(find.text('Timer'));
+      await tester.tap(find.widgetWithText(Tab, 'Timer'));
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('00:40'), findsOneWidget);
@@ -195,9 +197,9 @@ void main() {
 
       // Switch back and forth 5 times without starting timer
       for (var i = 0; i < 5; i++) {
-        await tester.tap(find.text('Tarefas'));
+        await tester.tap(find.widgetWithText(Tab, 'Tarefas'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Timer'));
+        await tester.tap(find.widgetWithText(Tab, 'Timer'));
         await tester.pumpAndSettle();
       }
 

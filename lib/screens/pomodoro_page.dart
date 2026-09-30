@@ -507,10 +507,19 @@ class _PomodoroPageState extends State<PomodoroPage>
       ),
       body: AnimatedBuilder(
         animation: _tabController,
-        builder: (context, _) => IndexedStack(
-          index: _tabController.index,
-          children: [
-          SingleChildScrollView(
+        builder: (context, _) {
+          final idx = _tabController.index;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              // Both tabs are painted at all times (Opacity, not Offstage) so
+              // GPU shaders compile on the first frame instead of on first switch.
+              Opacity(
+                opacity: idx == 0 ? 1.0 : 0.0,
+                child: IgnorePointer(
+                  ignoring: idx != 0,
+                  child: RepaintBoundary(
+                    child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -669,20 +678,32 @@ class _PomodoroPageState extends State<PomodoroPage>
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: TodoSection(
-              todos: _todos,
-              todoController: _todoController,
-              todoFocusNode: _todoFocusNode,
-              onAddTodo: _addTodo,
-              onToggleTodoDone: _toggleTodoDone,
-              onEditTodo: _editTodo,
-              onRemoveTodo: _removeTodo,
-            ),
-          ),
-        ],
-        ),
+                  ),
+                ),
+              ),
+              Opacity(
+                opacity: idx == 1 ? 1.0 : 0.0,
+                child: IgnorePointer(
+                  ignoring: idx != 1,
+                  child: RepaintBoundary(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: TodoSection(
+                        todos: _todos,
+                        todoController: _todoController,
+                        todoFocusNode: _todoFocusNode,
+                        onAddTodo: _addTodo,
+                        onToggleTodoDone: _toggleTodoDone,
+                        onEditTodo: _editTodo,
+                        onRemoveTodo: _removeTodo,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
