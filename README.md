@@ -66,6 +66,22 @@ flutter build windows --release   # Windows
 flutter build web --release       # Web
 ```
 
+### Android signing
+
+`flutter build apk --release` signs with the key described in
+`android/key.properties` (gitignored):
+
+```properties
+storeFile=/path/to/upload-keystore.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+Without that file the release APK is left **unsigned**, which is what F-Droid
+expects (it builds from source and signs with its own key). For a quick local
+install use `flutter build apk --debug` or `flutter run`.
+
 ---
 
 ## Packaging as a .deb (Linux)
@@ -75,7 +91,7 @@ After running `flutter build linux --release`, use the bundled
 `dpkg-deb` and ImageMagick (`convert`).
 
 The script installs the desktop entry, the `StartupWMClass` and the themed icon
-all named after `APPLICATION_ID` (`com.example.foxtimer`), which must match the
+all named after `APPLICATION_ID` (`io.github.romulofer.foxtimer`), which must match the
 value in `linux/CMakeLists.txt`. This is what lets the taskbar and alt-tab
 window switcher associate the running window with the app icon — a plain
 `foxtimer.desktop` name does not match the window's `WM_CLASS`/app-id and leaves
@@ -91,7 +107,7 @@ bash package_deb.sh
 ### Installing the .deb
 
 ```bash
-sudo dpkg -i foxtimer_1.5.0_amd64.deb
+sudo dpkg -i foxtimer_1.5.1_amd64.deb
 # Fix any missing dependencies:
 sudo apt-get install -f
 ```
@@ -117,7 +133,7 @@ Start an emulator (or plug in a device), then either run them through Flutter:
 
 ```bash
 flutter emulators --launch <emulator-id>
-adb shell pm grant com.example.foxtimer android.permission.POST_NOTIFICATIONS  # after the app is installed once
+adb shell pm grant io.github.romulofer.foxtimer android.permission.POST_NOTIFICATIONS  # after the app is installed once
 flutter test integration_test -d <device-id>
 ```
 
@@ -151,6 +167,38 @@ whose core function is an alarm/timer.
 
 ---
 
+## F-Droid
+
+The repository is set up for [F-Droid](https://f-droid.org):
+
+- License: GPL-3.0-or-later ([`LICENSE`](LICENSE)); only FOSS dependencies,
+  no internet permission, no Google Play Services.
+- Application ID: `io.github.romulofer.foxtimer`.
+- Store listing (title, descriptions, changelogs per `versionCode`, icon and
+  screenshots) in [`fastlane/metadata/android`](fastlane/metadata/android), which
+  F-Droid reads from the tagged commit. Add `changelogs/<versionCode>.txt` for
+  every release.
+- Releases are detected from `vX.Y.Z` tags; the `versionCode` is the build
+  number after `+` in `pubspec.yaml`.
+- [`fdroid/io.github.romulofer.foxtimer.yml`](fdroid/io.github.romulofer.foxtimer.yml)
+  is the draft build recipe to submit as a merge request to
+  [fdroiddata](https://gitlab.com/fdroid/fdroiddata).
+
+> Until 1.5.0 the app ID was `com.example.foxtimer`. On Android the new ID is
+> a separate app (reinstall once). On Linux the data directory is moved from
+> `~/.local/share/com.example.foxtimer` automatically on first start.
+
+---
+
+## License
+
+FoxTimer is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [`LICENSE`](LICENSE).
+
+---
+
 ## Project structure
 
 ```
@@ -163,6 +211,8 @@ foxtimer/
 ├── macos/             # macOS platform code
 ├── windows/           # Windows platform code
 ├── web/               # Web platform code
+├── fastlane/          # F-Droid store listing
+├── fdroid/            # Draft F-Droid build recipe
 ├── test/              # Unit tests
 ├── integration_test/  # Integration tests
 └── pubspec.yaml       # Project manifest and dependencies

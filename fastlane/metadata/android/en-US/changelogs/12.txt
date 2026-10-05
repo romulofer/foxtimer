@@ -1,0 +1,6 @@
+* First F-Droid release
+* New application ID: io.github.romulofer.foxtimer
+* Licensed under GPL-3.0-or-later
+* End-of-cycle alerts while the app is in the background
+* Timer stays accurate when Android pauses the app
+* Phone layout fixes, FLAC custom sounds

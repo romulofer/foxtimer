@@ -1,0 +1,11 @@
+<p>FoxTimer é um timer Pomodoro simples. Alterne sessões de foco com pausas curtas e longas, mantenha uma lista de tarefas ao lado do timer e receba um alerta quando cada fase termina.</p>
+
+<ul>
+<li>Duração do foco, da pausa curta e da pausa longa configuráveis, e quantos ciclos antes da pausa longa</li>
+<li>A próxima fase começa automaticamente</li>
+<li>Alerta no fim de cada fase, mesmo com o app em segundo plano ou a tela desligada</li>
+<li>Som de fim de ciclo incluso ou o seu próprio (WAV, MP3, OGG, M4A, AAC, FLAC), com controle de volume</li>
+<li>Lista de tarefas: adicione, edite, marque como feita e remova</li>
+<li>Tema claro, escuro ou do sistema</li>
+<li>Sem anúncios, sem rastreamento, sem acesso à internet</li>
+</ul>

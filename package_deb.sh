@@ -5,13 +5,13 @@ set -e
 # Run `flutter build linux --release` first, then run this from the project root.
 
 BUNDLE="build/linux/x64/release/bundle"
-VERSION="1.5.0"
+VERSION="1.5.1"
 ARCH="amd64"
 # Must match APPLICATION_ID in linux/CMakeLists.txt. The desktop file, the
 # themed icon and StartupWMClass are all named after it so the desktop
 # environment can map the running window (WM_CLASS / Wayland app-id) back to
 # this .desktop entry — otherwise the taskbar and alt-tab show no icon.
-APP_ID="com.example.foxtimer"
+APP_ID="io.github.romulofer.foxtimer"
 DEB_ROOT="/tmp/foxtimer_deb"
 
 # 1. Create package directory tree

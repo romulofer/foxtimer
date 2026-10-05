@@ -1,4 +1,4 @@
-package com.example.foxtimer
+package io.github.romulofer.foxtimer
 
 import android.Manifest
 import android.os.Build

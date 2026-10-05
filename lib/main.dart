@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/pomodoro_page.dart';
+import 'services/linux_data_migration.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Only initialize MediaKit on Linux
   if (Platform.isLinux) {
     MediaKit.ensureInitialized();
+    // Antes de qualquer leitura das preferências.
+    await migrateLinuxDataDir();
   }
 
   runApp(const MyApp());

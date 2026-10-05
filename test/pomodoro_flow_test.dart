@@ -77,7 +77,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     PackageInfo.setMockInitialValues(
       appName: 'foxtimer',
-      packageName: 'com.example.foxtimer',
+      packageName: 'io.github.romulofer.foxtimer',
       version: '1.4.0',
       buildNumber: '8',
       buildSignature: '',

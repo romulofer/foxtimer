@@ -1,4 +1,4 @@
-package com.example.foxtimer
+package io.github.romulofer.foxtimer
 
 import io.flutter.embedding.android.FlutterActivity
 

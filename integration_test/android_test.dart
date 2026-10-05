@@ -333,7 +333,7 @@ void main() {
         reason:
             'POST_NOTIFICATIONS not granted. MainActivityTest grants it; '
             'with `flutter test` run first: adb shell pm grant '
-            'com.example.foxtimer android.permission.POST_NOTIFICATIONS',
+            'io.github.romulofer.foxtimer android.permission.POST_NOTIFICATIONS',
       );
       // USE_EXACT_ALARM in the manifest: no prompt, alarms not deferred.
       expect(await android.canScheduleExactNotifications(), isTrue);

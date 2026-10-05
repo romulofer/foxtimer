@@ -1,0 +1,6 @@
+* Primeira versão no F-Droid
+* Novo ID do aplicativo: io.github.romulofer.foxtimer
+* Licenciado sob GPL-3.0-or-later
+* Alertas de fim de ciclo com o app em segundo plano
+* O timer continua preciso quando o Android pausa o app
+* Ajustes de layout no celular, sons personalizados em FLAC

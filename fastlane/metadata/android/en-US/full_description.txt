@@ -1,0 +1,13 @@
+<p>FoxTimer is a simple Pomodoro timer. Alternate focus sessions with short and long breaks, keep a task list next to the timer and get an alert when each phase ends.</p>
+
+<ul>
+<li>Configurable focus, short break and long break durations, and how many cycles come before a long break</li>
+<li>The next phase starts automatically</li>
+<li>Alert at the end of every phase, even with the app in the background or the screen off</li>
+<li>Bundled end sound or your own (WAV, MP3, OGG, M4A, AAC, FLAC), with volume control</li>
+<li>Task list: add, edit, check off and delete tasks</li>
+<li>Light, dark or system theme</li>
+<li>No ads, no tracking, no internet access</li>
+</ul>
+
+<p>The interface is in Brazilian Portuguese.</p>

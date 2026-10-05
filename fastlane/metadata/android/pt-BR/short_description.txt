@@ -1,0 +1,1 @@
+Timer Pomodoro simples com lista de tarefas e alertas de fim de ciclo
