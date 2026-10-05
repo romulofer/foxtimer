@@ -91,11 +91,10 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _importSound() async {
     setState(() => _importing = true);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final picked = await FilePicker.pickFile(
         type: FileType.custom,
-        allowedExtensions: ['wav', 'mp3', 'ogg', 'm4a', 'aac'],
+        allowedExtensions: ['wav', 'mp3', 'ogg', 'm4a', 'aac', 'flac'],
       );
-      final picked = result?.files.single;
       if (picked == null || picked.path == null) return;
 
       final label = picked.name.contains('.')
@@ -143,172 +142,175 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const Text(
-            'Tema',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 12),
-          SegmentedButton<ThemeMode>(
-            segments: const [
-              ButtonSegment(
-                value: ThemeMode.system,
-                label: Text('Sistema'),
-                icon: Icon(Icons.brightness_auto),
-              ),
-              ButtonSegment(
-                value: ThemeMode.light,
-                label: Text('Claro'),
-                icon: Icon(Icons.light_mode),
-              ),
-              ButtonSegment(
-                value: ThemeMode.dark,
-                label: Text('Escuro'),
-                icon: Icon(Icons.dark_mode),
-              ),
-            ],
-            selected: {_themeMode},
-            onSelectionChanged: (selection) {
-              final mode = selection.first;
-              setState(() => _themeMode = mode);
-              widget.onThemeModeChanged(mode);
-            },
-          ),
-
-          const SizedBox(height: 32),
-          const Divider(),
-          const SizedBox(height: 8),
-
-          const Text(
-            'Som',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                const Expanded(child: Text('Som ao fim do ciclo')),
-                Switch(
-                  value: _soundEnabled,
-                  onChanged: (value) {
-                    setState(() => _soundEnabled = value);
-                    _saveSoundPreferences();
-                    if (!value) _stopSound();
-                  },
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const Text(
+              'Tema',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  label: Text('Sistema'),
+                  icon: Icon(Icons.brightness_auto),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  label: Text('Claro'),
+                  icon: Icon(Icons.light_mode),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  label: Text('Escuro'),
+                  icon: Icon(Icons.dark_mode),
                 ),
               ],
+              selected: {_themeMode},
+              onSelectionChanged: (selection) {
+                final mode = selection.first;
+                setState(() => _themeMode = mode);
+                widget.onThemeModeChanged(mode);
+              },
             ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Volume'),
-            subtitle: Slider(
-              value: _soundVolume,
-              min: 0,
-              max: 1,
-              divisions: 10,
-              label: '${(_soundVolume * 100).round()}%',
-              onChanged: _soundEnabled
-                  ? (value) => setState(() => _soundVolume = value)
-                  : null,
-              onChangeEnd: (value) => _saveSoundPreferences(),
-            ),
-          ),
 
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Sons disponíveis',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 8),
+
+            const Text(
+              'Som',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  const Expanded(child: Text('Som ao fim do ciclo')),
+                  Switch(
+                    value: _soundEnabled,
+                    onChanged: (value) {
+                      setState(() => _soundEnabled = value);
+                      _saveSoundPreferences();
+                      if (!value) _stopSound();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Volume'),
+              subtitle: Slider(
+                value: _soundVolume,
+                min: 0,
+                max: 1,
+                divisions: 10,
+                label: '${(_soundVolume * 100).round()}%',
+                onChanged: _soundEnabled
+                    ? (value) => setState(() => _soundVolume = value)
+                    : null,
+                onChangeEnd: (value) => _saveSoundPreferences(),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Sons disponíveis',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+                if (_playingSoundId != null)
+                  TextButton.icon(
+                    onPressed: _stopSound,
+                    icon: const Icon(Icons.stop, size: 18),
+                    label: const Text('Parar'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+
+            for (final sound in _allSounds)
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: RadioListTile<String>(
+                  value: sound.id,
+                  groupValue: _selectedSoundId,
+                  onChanged: !_soundEnabled
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() => _selectedSoundId = value);
+                          _saveSoundPreferences();
+                        },
+                  title: Text(sound.label),
+                  secondary: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          _playingSoundId == sound.id
+                              ? Icons.stop_circle
+                              : Icons.play_circle_outline,
+                          color: colorScheme.primary,
+                        ),
+                        onPressed: !_soundEnabled
+                            ? null
+                            : () => _playingSoundId == sound.id
+                                  ? _stopSound()
+                                  : _playSound(sound),
+                      ),
+                      if (sound.isCustom)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _deleteCustomSound(sound),
+                        ),
+                    ],
                   ),
                 ),
               ),
-              if (_playingSoundId != null)
-                TextButton.icon(
-                  onPressed: _stopSound,
-                  icon: const Icon(Icons.stop, size: 18),
-                  label: const Text('Parar'),
+
+            const SizedBox(height: 4),
+            OutlinedButton.icon(
+              onPressed: _importing ? null : _importSound,
+              icon: _importing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add),
+              label: Text(
+                _importing ? 'Importando...' : 'Adicionar som personalizado',
+              ),
+            ),
+
+            if (_appVersion.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Versão $_appVersion',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
                 ),
+              ),
             ],
-          ),
-          const SizedBox(height: 4),
-
-          for (final sound in _allSounds)
-            Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: RadioListTile<String>(
-                value: sound.id,
-                groupValue: _selectedSoundId,
-                onChanged: !_soundEnabled
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() => _selectedSoundId = value);
-                        _saveSoundPreferences();
-                      },
-                title: Text(sound.label),
-                secondary: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        _playingSoundId == sound.id
-                            ? Icons.stop_circle
-                            : Icons.play_circle_outline,
-                        color: colorScheme.primary,
-                      ),
-                      onPressed: !_soundEnabled
-                          ? null
-                          : () => _playingSoundId == sound.id
-                                ? _stopSound()
-                                : _playSound(sound),
-                    ),
-                    if (sound.isCustom)
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _deleteCustomSound(sound),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 4),
-          OutlinedButton.icon(
-            onPressed: _importing ? null : _importSound,
-            icon: _importing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add),
-            label: Text(
-              _importing ? 'Importando...' : 'Adicionar som personalizado',
-            ),
-          ),
-
-          if (_appVersion.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'Versão $_appVersion',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colorScheme.onSurface.withValues(alpha: 0.4),
-                ),
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }

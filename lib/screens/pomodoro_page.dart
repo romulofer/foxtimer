@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:media_kit/media_kit.dart';
@@ -10,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sound_option.dart';
 import '../models/todo_item.dart';
 import '../services/custom_sound_store.dart';
+import '../services/cycle_notifications.dart';
 import '../widgets/config_section.dart';
 import '../widgets/todo_section.dart';
 import 'settings_page.dart';
@@ -29,7 +31,7 @@ class PomodoroPage extends StatefulWidget {
 }
 
 class _PomodoroPageState extends State<PomodoroPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final TabController _tabController;
 
   // Configurações padrão (em minutos)
@@ -48,7 +50,19 @@ class _PomodoroPageState extends State<PomodoroPage>
   bool _isLongBreak = false;
   int _completedWorkSessions = 0;
 
+  // Instante em que a fase atual termina, enquanto o timer roda. A contagem
+  // é derivada dele em vez de decrementada a cada tick: no Android o app em
+  // segundo plano tem os timers do Dart atrasados ou congelados, e ao voltar
+  // o cronômetro precisa refletir o tempo real que passou.
+  DateTime? _phaseEndsAt;
   Timer? _timer;
+
+  // Alertas do sistema para os fins de fase enquanto o app está em segundo
+  // plano. As operações são encadeadas para que um cancelamento ao voltar
+  // nunca rode antes de um agendamento ainda em andamento.
+  final CycleNotifications _notifications = CycleNotifications.instance;
+  Future<void> _alertsOp = Future.value();
+  bool _alertsScheduled = false;
 
   // Player de som
   AudioPlayer? _audioPlayer;
@@ -71,7 +85,15 @@ class _PomodoroPageState extends State<PomodoroPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, animationDuration: Duration.zero);
+    WidgetsBinding.instance.addObserver(this);
+    // Alertas de uma sessão anterior cujo processo foi encerrado pelo
+    // sistema: o timer recomeça parado, então eles não valem mais.
+    _cancelAlerts();
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      animationDuration: Duration.zero,
+    );
     _remainingSeconds.value = _workMinutes * 60;
 
     // Initialize platform-specific audio player
@@ -96,7 +118,49 @@ class _PomodoroPageState extends State<PomodoroPage>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+        _scheduleAlerts();
+      case AppLifecycleState.resumed:
+        _cancelAlerts();
+        // Atualiza na hora em vez de esperar o próximo tick (e avança as
+        // fases que terminaram enquanto isso).
+        _tick();
+      default:
+    }
+  }
+
+  void _queueAlertsOp(Future<void> Function() op) {
+    _alertsOp = _alertsOp.then((_) => op()).catchError((Object e) {
+      debugPrint('Erro nos alertas de fim de ciclo: $e');
+    });
+  }
+
+  void _scheduleAlerts() {
+    if (!_isRunning || _phaseEndsAt == null) return;
+    // Calculado agora, antes de o Android congelar o app.
+    final ends = _upcomingCycleEnds(12);
+    final withSound = _soundEnabled;
+    _queueAlertsOp(() async {
+      _alertsScheduled = await _notifications.schedule(
+        ends,
+        withSound: withSound,
+      );
+    });
+  }
+
+  void _cancelAlerts() {
+    _queueAlertsOp(() async {
+      _alertsScheduled = false;
+      await _notifications.cancelAll();
+    });
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cancelAlerts();
     _tabController.dispose();
     _timer?.cancel();
     _audioPlayer?.dispose();
@@ -297,6 +361,8 @@ class _PomodoroPageState extends State<PomodoroPage>
 
   void _onApplyPressed() {
     if (_isRunning) return;
+    // Fecha o teclado virtual no celular.
+    FocusScope.of(context).unfocus();
 
     final work = int.tryParse(_workMinutesCtrl.text.trim());
     final shortB = int.tryParse(_shortBreakMinutesCtrl.text.trim());
@@ -334,61 +400,131 @@ class _PomodoroPageState extends State<PomodoroPage>
   // TIMER
   // ==============================
 
-  void _startTimer() {
+  void _startTicker() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingSeconds.value > 0) {
-        // Notifier update rebuilds only the countdown, not the whole page.
-        _remainingSeconds.value--;
-      } else {
-        _timer?.cancel();
-        _onTimerFinished();
-      }
-    });
+    // Tick curto só para reagir rápido à virada do segundo; o notifier
+    // ignora valores iguais, então não há rebuild extra.
+    _timer = Timer.periodic(const Duration(milliseconds: 250), (_) => _tick());
+  }
 
+  void _tick() {
+    final endsAt = _phaseEndsAt;
+    if (endsAt == null) return;
+    final left = endsAt.difference(clock.now());
+    if (left > Duration.zero) {
+      // Notifier update rebuilds only the countdown, not the whole page.
+      _remainingSeconds.value = (left.inMilliseconds / 1000).ceil();
+    } else {
+      _onTimerFinished();
+    }
+  }
+
+  void _startTimer() {
+    // Contextual: o usuário acabou de iniciar algo que vai avisá-lo depois.
+    _notifications.requestPermission().catchError((Object e) {
+      debugPrint('Erro ao pedir permissão de notificação: $e');
+    });
+    _phaseEndsAt = clock.now().add(Duration(seconds: _remainingSeconds.value));
+    _startTicker();
     setState(() => _isRunning = true);
   }
 
   void _startPauseTimer() {
     if (_isRunning) {
+      _tick();
       _timer?.cancel();
+      _phaseEndsAt = null;
       setState(() => _isRunning = false);
     } else {
       _startTimer();
     }
   }
 
-  void _onTimerFinished() async {
-    await _playEndSound();
+  // Fase que vem depois de uma fase de foco (isWork) ou de pausa, com a
+  // mensagem de fim correspondente. Não altera o estado.
+  ({bool isWork, bool isLong, int completed, String message}) _nextPhase({
+    required bool isWork,
+    required int completed,
+  }) {
+    if (isWork) {
+      final done = completed + 1;
+      final isLong = done % _cyclesBeforeLongBreak == 0;
+      return (
+        isWork: false,
+        isLong: isLong,
+        completed: done,
+        message: isLong
+            ? 'Pausa longa! Descanse bastante.'
+            : 'Pausa curta! Descanse bastante.',
+      );
+    }
+    // Terminou pausa → volta ao foco
+    return (
+      isWork: true,
+      isLong: false,
+      completed: completed,
+      message: 'Hora de focar novamente!',
+    );
+  }
 
-    String message = ''; // ← CORREÇÃO
+  // Avança para a próxima fase e devolve a mensagem correspondente.
+  String _advancePhase() {
+    final next = _nextPhase(
+      isWork: _isWorkTime,
+      completed: _completedWorkSessions,
+    );
+    _isWorkTime = next.isWork;
+    _isLongBreak = next.isLong;
+    _completedWorkSessions = next.completed;
+    return next.message;
+  }
 
+  // Os próximos [count] fins de fase a partir da atual, como o timer os
+  // encadearia rodando sem parar.
+  List<CycleEnd> _upcomingCycleEnds(int count) {
+    var at = _phaseEndsAt!;
+    var isWork = _isWorkTime;
+    var completed = _completedWorkSessions;
+    final ends = <CycleEnd>[];
+    for (var i = 0; i < count; i++) {
+      final next = _nextPhase(isWork: isWork, completed: completed);
+      ends.add(CycleEnd(at, next.message));
+      isWork = next.isWork;
+      completed = next.completed;
+      at = at.add(
+        Duration(
+          seconds: _phaseSeconds(isWork: isWork, isLong: next.isLong),
+        ),
+      );
+    }
+    return ends;
+  }
+
+  void _onTimerFinished() {
+    _timer?.cancel();
+    final now = clock.now();
+    var endsAt = _phaseEndsAt!;
+    final lateBy = now.difference(endsAt);
+    late String message;
+
+    // Inicia automaticamente novo ciclo, encadeado ao fim do anterior. Se o
+    // app ficou em segundo plano por várias fases, avança todas de uma vez.
     setState(() {
-      if (_isWorkTime) {
-        _completedWorkSessions++;
-
-        if (_completedWorkSessions % _cyclesBeforeLongBreak == 0) {
-          _isWorkTime = false;
-          _isLongBreak = true;
-          _remainingSeconds.value = _longBreakMinutes * 60;
-          message = 'Pausa longa! Descanse bastante.';
-        } else {
-          _isWorkTime = false;
-          _isLongBreak = false;
-          _remainingSeconds.value = _shortBreakMinutes * 60;
-          message = 'Pausa curta! Descanse bastante.';
-        }
-      } else {
-        // Terminou pausa → volta ao foco
-        _isWorkTime = true;
-        _isLongBreak = false;
-        _remainingSeconds.value = _workMinutes * 60;
-        message = 'Hora de focar novamente!';
-      }
+      do {
+        message = _advancePhase();
+        endsAt = endsAt.add(Duration(seconds: _totalSecondsForPhase));
+      } while (!endsAt.isAfter(now));
+      _phaseEndsAt = endsAt;
+      _remainingSeconds.value = (endsAt.difference(now).inMilliseconds / 1000)
+          .ceil();
     });
+    _startTicker();
 
-    // Inicia automaticamente novo ciclo
-    _startTimer();
+    // Em segundo plano o alerta agendado já toca. Ao voltar de um
+    // congelamento o fim já passou faz tempo e tocar agora só atrapalha.
+    if (!_alertsScheduled && lateBy < const Duration(seconds: 2)) {
+      _playEndSound();
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -403,6 +539,7 @@ class _PomodoroPageState extends State<PomodoroPage>
 
   void _resetTimer() {
     _timer?.cancel();
+    _phaseEndsAt = null;
     setState(() {
       _isRunning = false;
       _isWorkTime = true;
@@ -457,11 +594,14 @@ class _PomodoroPageState extends State<PomodoroPage>
   // UI
   // ==============================
 
-  int get _totalSecondsForPhase {
-    if (_isWorkTime) return _workMinutes * 60;
-    if (_isLongBreak) return _longBreakMinutes * 60;
+  int _phaseSeconds({required bool isWork, required bool isLong}) {
+    if (isWork) return _workMinutes * 60;
+    if (isLong) return _longBreakMinutes * 60;
     return _shortBreakMinutes * 60;
   }
+
+  int get _totalSecondsForPhase =>
+      _phaseSeconds(isWork: _isWorkTime, isLong: _isLongBreak);
 
   @override
   Widget build(BuildContext context) {
@@ -485,6 +625,11 @@ class _PomodoroPageState extends State<PomodoroPage>
     }
 
     final total = _totalSecondsForPhase;
+    // Celular: margem menor para sobrar espaço. Desktop/tablet: conteúdo
+    // limitado a uma coluna central em vez de esticar pela janela toda.
+    final pagePadding = EdgeInsets.all(
+      MediaQuery.sizeOf(context).width < 600 ? 16 : 24,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -506,208 +651,258 @@ class _PomodoroPageState extends State<PomodoroPage>
           ],
         ),
       ),
-      body: AnimatedBuilder(
-        animation: _tabController,
-        builder: (context, _) {
-          final idx = _tabController.index;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              // Both tabs are painted at all times (Opacity, not Offstage) so
-              // GPU shaders compile on the first frame instead of on first switch.
-              Opacity(
-                opacity: idx == 0 ? 1.0 : 0.0,
-                child: IgnorePointer(
-                  ignoring: idx != 0,
-                  child: RepaintBoundary(
-                    child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      // SafeArea: Android 15+ força edge-to-edge, então sem isso o fim da
+      // rolagem fica atrás da barra de navegação do sistema.
+      body: SafeArea(
+        top: false,
+        child: AnimatedBuilder(
+          animation: _tabController,
+          builder: (context, _) {
+            final idx = _tabController.index;
+            return Stack(
+              fit: StackFit.expand,
               children: [
-                ConfigSection(
-                  isRunning: _isRunning,
-                  workMinutesCtrl: _workMinutesCtrl,
-                  shortBreakMinutesCtrl: _shortBreakMinutesCtrl,
-                  longBreakMinutesCtrl: _longBreakMinutesCtrl,
-                  cyclesBeforeLongBreakCtrl: _cyclesBeforeLongBreakCtrl,
-                  onApply: _onApplyPressed,
-                ),
-                const SizedBox(height: 24),
-
-                // Timer / Pomodoro
-                Center(
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: modeColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(modeIcon, size: 18, color: modeColor),
-                            const SizedBox(width: 8),
-                            Text(
-                              modeText,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: modeColor,
+                // Both tabs are painted at all times (Opacity, not Offstage) so
+                // GPU shaders compile on the first frame instead of on first switch.
+                Opacity(
+                  opacity: idx == 0 ? 1.0 : 0.0,
+                  child: IgnorePointer(
+                    ignoring: idx != 0,
+                    child: RepaintBoundary(
+                      child: SingleChildScrollView(
+                        padding: pagePadding,
+                        child: _maxWidth(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              ConfigSection(
+                                isRunning: _isRunning,
+                                workMinutesCtrl: _workMinutesCtrl,
+                                shortBreakMinutesCtrl: _shortBreakMinutesCtrl,
+                                longBreakMinutesCtrl: _longBreakMinutesCtrl,
+                                cyclesBeforeLongBreakCtrl:
+                                    _cyclesBeforeLongBreakCtrl,
+                                onApply: _onApplyPressed,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      SizedBox(
-                        width: 240,
-                        height: 240,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            ValueListenableBuilder<int>(
-                              valueListenable: _remainingSeconds,
-                              builder: (context, remaining, _) {
-                                final progress = total == 0
-                                    ? 0.0
-                                    : 1 - (remaining / total);
-                                return SizedBox(
-                                  width: 240,
-                                  height: 240,
-                                  child: CircularProgressIndicator(
-                                    value: progress.clamp(0.0, 1.0),
-                                    strokeWidth: 10,
-                                    strokeCap: StrokeCap.round,
-                                    backgroundColor: colorScheme.onSurface
-                                        .withValues(alpha: 0.08),
-                                    valueColor: AlwaysStoppedAnimation(
-                                      modeColor,
+                              const SizedBox(height: 24),
+
+                              // Timer / Pomodoro
+                              Center(
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: modeColor.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            modeIcon,
+                                            size: 18,
+                                            color: modeColor,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            modeText,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: modeColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ValueListenableBuilder<int>(
-                                  valueListenable: _remainingSeconds,
-                                  builder: (context, remaining, _) => Text(
-                                    _formatTime(remaining),
-                                    style: const TextStyle(
-                                      fontSize: 56,
-                                      fontWeight: FontWeight.bold,
-                                      fontFeatures: [
-                                        FontFeature.tabularFigures(),
+                                    const SizedBox(height: 28),
+                                    SizedBox(
+                                      width: 240,
+                                      height: 240,
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          ValueListenableBuilder<int>(
+                                            valueListenable: _remainingSeconds,
+                                            builder: (context, remaining, _) {
+                                              final progress = total == 0
+                                                  ? 0.0
+                                                  : 1 - (remaining / total);
+                                              return SizedBox(
+                                                width: 240,
+                                                height: 240,
+                                                child: CircularProgressIndicator(
+                                                  value: progress.clamp(
+                                                    0.0,
+                                                    1.0,
+                                                  ),
+                                                  strokeWidth: 10,
+                                                  strokeCap: StrokeCap.round,
+                                                  backgroundColor: colorScheme
+                                                      .onSurface
+                                                      .withValues(alpha: 0.08),
+                                                  valueColor:
+                                                      AlwaysStoppedAnimation(
+                                                        modeColor,
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                          Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              ValueListenableBuilder<int>(
+                                                valueListenable:
+                                                    _remainingSeconds,
+                                                builder:
+                                                    (
+                                                      context,
+                                                      remaining,
+                                                      _,
+                                                    ) => Text(
+                                                      _formatTime(remaining),
+                                                      style: const TextStyle(
+                                                        fontSize: 56,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontFeatures: [
+                                                          FontFeature.tabularFigures(),
+                                                        ],
+                                                      ),
+                                                    ),
+                                              ),
+                                              Text(
+                                                _isRunning
+                                                    ? 'em andamento'
+                                                    : 'pausado',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: colorScheme.onSurface
+                                                      .withValues(alpha: 0.4),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: List.generate(
+                                        _cyclesBeforeLongBreak,
+                                        (i) {
+                                          final filled =
+                                              i <
+                                                  (_completedWorkSessions %
+                                                      _cyclesBeforeLongBreak) ||
+                                              (_completedWorkSessions != 0 &&
+                                                  _completedWorkSessions %
+                                                          _cyclesBeforeLongBreak ==
+                                                      0 &&
+                                                  i < _cyclesBeforeLongBreak);
+                                          return Container(
+                                            margin: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                            ),
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: filled
+                                                  ? colorScheme.primary
+                                                  : colorScheme.onSurface
+                                                        .withValues(
+                                                          alpha: 0.15,
+                                                        ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(height: 32),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        IconButton.outlined(
+                                          iconSize: 22,
+                                          padding: const EdgeInsets.all(14),
+                                          icon: const Icon(Icons.refresh),
+                                          tooltip: 'Reiniciar',
+                                          onPressed: _resetTimer,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        FilledButton.icon(
+                                          icon: Icon(
+                                            _isRunning
+                                                ? Icons.pause
+                                                : Icons.play_arrow,
+                                          ),
+                                          onPressed: _startPauseTimer,
+                                          label: Text(
+                                            _isRunning ? 'Pausar' : 'Iniciar',
+                                          ),
+                                        ),
                                       ],
                                     ),
-                                  ),
+                                  ],
                                 ),
-                                Text(
-                                  _isRunning ? 'em andamento' : 'pausado',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: colorScheme.onSurface.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(_cyclesBeforeLongBreak, (i) {
-                          final filled =
-                              i <
-                                  (_completedWorkSessions %
-                                      _cyclesBeforeLongBreak) ||
-                              (_completedWorkSessions != 0 &&
-                                  _completedWorkSessions %
-                                          _cyclesBeforeLongBreak ==
-                                      0 &&
-                                  i < _cyclesBeforeLongBreak);
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: filled
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurface.withValues(
-                                      alpha: 0.15,
-                                    ),
-                            ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 32),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton.outlined(
-                            iconSize: 22,
-                            padding: const EdgeInsets.all(14),
-                            icon: const Icon(Icons.refresh),
-                            tooltip: 'Reiniciar',
-                            onPressed: _resetTimer,
-                          ),
-                          const SizedBox(width: 16),
-                          FilledButton.icon(
-                            icon: Icon(
-                              _isRunning ? Icons.pause : Icons.play_arrow,
-                            ),
-                            onPressed: _startPauseTimer,
-                            label: Text(_isRunning ? 'Pausar' : 'Iniciar'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-                  ),
-                ),
-              ),
-              Opacity(
-                opacity: idx == 1 ? 1.0 : 0.0,
-                child: IgnorePointer(
-                  ignoring: idx != 1,
-                  child: RepaintBoundary(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: TodoSection(
-                        todos: _todos,
-                        todoController: _todoController,
-                        todoFocusNode: _todoFocusNode,
-                        onAddTodo: _addTodo,
-                        onToggleTodoDone: _toggleTodoDone,
-                        onEditTodo: _editTodo,
-                        onRemoveTodo: _removeTodo,
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+                Opacity(
+                  opacity: idx == 1 ? 1.0 : 0.0,
+                  child: IgnorePointer(
+                    ignoring: idx != 1,
+                    child: RepaintBoundary(
+                      child: SingleChildScrollView(
+                        padding: pagePadding,
+                        child: _maxWidth(
+                          TodoSection(
+                            todos: _todos,
+                            todoController: _todoController,
+                            todoFocusNode: _todoFocusNode,
+                            onAddTodo: _addTodo,
+                            onToggleTodoDone: _toggleTodoDone,
+                            onEditTodo: _editTodo,
+                            onRemoveTodo: _removeTodo,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
+
+  Widget _maxWidth(Widget child) => Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: child,
+    ),
+  );
 
   Future<void> _openSettings() async {
     await Navigator.of(context).push(

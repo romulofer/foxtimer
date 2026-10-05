@@ -104,6 +104,53 @@ sudo dpkg -r foxtimer
 
 ---
 
+## Testing
+
+```bash
+flutter test                                              # unit + widget tests
+flutter test integration_test/app_test.dart -d linux      # end-to-end on desktop
+```
+
+### Android instrumentation tests
+
+Start an emulator (or plug in a device), then either run them through Flutter:
+
+```bash
+flutter emulators --launch <emulator-id>
+adb shell pm grant com.example.foxtimer android.permission.POST_NOTIFICATIONS  # after the app is installed once
+flutter test integration_test -d <device-id>
+```
+
+or as JUnit instrumentation tests through Gradle (results in
+`build/app/outputs/androidTest-results/`):
+
+```bash
+cd android
+./gradlew app:connectedDebugAndroidTest \
+  -Ptarget=`pwd`/../integration_test/android_test.dart
+```
+
+`integration_test/android_test.dart` covers the phone layout, numeric inputs,
+real-time countdown, catch-up after Android suspends the app in the
+background, the end-of-cycle alarms/notifications, the task list, the system
+back button and audio playback. The suspend test blocks the app for ~2 minutes
+on purpose, and the alarm test waits ~1 minute for a real alarm to fire.
+`MainActivityTest` grants the notification permission itself.
+
+---
+
+## Android: end-of-cycle alerts in the background
+
+Android delays or freezes a backgrounded app's timers, so while the app is in
+the background the upcoming phase ends (the next 12) are scheduled as exact
+alarms that post a notification with the default sound
+(`android/app/src/main/res/raw/town.ogg`). Opening the app again cancels them.
+Notifications need the user to allow them (asked on the first *Iniciar*);
+exact timing uses `USE_EXACT_ALARM`, which Google Play only accepts for apps
+whose core function is an alarm/timer.
+
+---
+
 ## Project structure
 
 ```

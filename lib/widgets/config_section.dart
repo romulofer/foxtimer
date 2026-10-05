@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class ConfigSection extends StatelessWidget {
   final bool isRunning;
@@ -34,9 +35,11 @@ class ConfigSection extends StatelessWidget {
               children: [
                 Icon(Icons.tune, color: colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
-                const Text(
-                  'Configurações do ciclo',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                const Flexible(
+                  child: Text(
+                    'Configurações do ciclo',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),
@@ -128,6 +131,8 @@ class ConfigSection extends StatelessWidget {
       controller: controller,
       enabled: enabled,
       keyboardType: TextInputType.number,
+      // Teclado numérico do Android ainda permite "-", "." e ",".
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       textAlign: TextAlign.center,
       style: const TextStyle(fontWeight: FontWeight.w600),
       decoration: InputDecoration(

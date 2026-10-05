@@ -1,7 +1,7 @@
 // Real end-to-end tests: run on an actual device/desktop binding (not the
 // fake-time flutter_test binding), so real plugins (media_kit/just_audio)
 // execute for real. Run with:
-//   flutter test integration_test/app_test.dart -d linux
+//   flutter test integration_test/app_test.dart -d linux   (or an Android device id)
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -53,11 +53,11 @@ void main() {
 
     expect(find.text('FoxTimer Pomodoro'), findsOneWidget);
 
-    await tester.tap(find.text('Tarefas'));
+    await tester.tap(find.widgetWithText(Tab, 'Tarefas'));
     await tester.pumpAndSettle();
     expect(find.text('O que precisa ser feito?'), findsOneWidget);
 
-    await tester.tap(find.text('Timer'));
+    await tester.tap(find.widgetWithText(Tab, 'Timer'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.settings));

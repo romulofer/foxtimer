@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
@@ -7,6 +8,47 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:foxtimer/main.dart';
+import 'package:foxtimer/services/cycle_notifications.dart';
+
+class _FakeNotifications extends CycleNotifications {
+  final scheduled = <List<CycleEnd>>[];
+  bool? lastWithSound;
+  int cancels = 0;
+
+  @override
+  Future<void> requestPermission() async {}
+
+  @override
+  Future<bool> schedule(List<CycleEnd> ends, {required bool withSound}) async {
+    scheduled.add(ends);
+    lastWithSound = withSound;
+    return true;
+  }
+
+  @override
+  Future<void> cancelAll() async => cancels++;
+}
+
+Future<void> _setLifecycle(
+  WidgetTester tester,
+  List<AppLifecycleState> states,
+) async {
+  for (final state in states) {
+    tester.binding.handleAppLifecycleStateChanged(state);
+  }
+  await tester.pump();
+}
+
+const _toBackground = [
+  AppLifecycleState.inactive,
+  AppLifecycleState.hidden,
+  AppLifecycleState.paused,
+];
+const _toForeground = [
+  AppLifecycleState.hidden,
+  AppLifecycleState.inactive,
+  AppLifecycleState.resumed,
+];
 
 Future<void> _setConfig(
   WidgetTester tester, {
@@ -180,34 +222,33 @@ void main() {
     },
   );
 
-  testWidgets(
-    'switching tabs multiple times preserves timer state',
-    (tester) async {
-      await setLargeSurface(tester);
-      await tester.pumpWidget(const MyApp());
-      await tester.pump();
+  testWidgets('switching tabs multiple times preserves timer state', (
+    tester,
+  ) async {
+    await setLargeSurface(tester);
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
 
-      await _setConfig(
-        tester,
-        work: '1',
-        shortBreak: '1',
-        longBreak: '1',
-        cycles: '2',
-      );
+    await _setConfig(
+      tester,
+      work: '1',
+      shortBreak: '1',
+      longBreak: '1',
+      cycles: '2',
+    );
 
-      // Switch back and forth 5 times without starting timer
-      for (var i = 0; i < 5; i++) {
-        await tester.tap(find.widgetWithText(Tab, 'Tarefas'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(Tab, 'Timer'));
-        await tester.pumpAndSettle();
-      }
+    // Switch back and forth 5 times without starting timer
+    for (var i = 0; i < 5; i++) {
+      await tester.tap(find.widgetWithText(Tab, 'Tarefas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(Tab, 'Timer'));
+      await tester.pumpAndSettle();
+    }
 
-      // Timer state unchanged
-      expect(find.text('01:00'), findsOneWidget);
-      expect(find.text('Iniciar'), findsOneWidget);
-    },
-  );
+    // Timer state unchanged
+    expect(find.text('01:00'), findsOneWidget);
+    expect(find.text('Iniciar'), findsOneWidget);
+  });
 
   testWidgets('opening settings and navigating back returns to the timer', (
     tester,
@@ -225,5 +266,116 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('FoxTimer Pomodoro'), findsOneWidget);
+  });
+
+  testWidgets('fits a phone screen and scrolls a long todo list', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    SharedPreferences.setMockInitialValues({
+      'todos':
+          '[${List.generate(30, (i) => '{"title":"Tarefa $i","done":false}').join(',')}]',
+    });
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pump();
+    // Any RenderFlex overflow would surface here as a test failure.
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.widgetWithText(Tab, 'Tarefas'));
+    await tester.pumpAndSettle();
+
+    final last = find.text('Tarefa 29');
+    expect(last.hitTestable(), findsNothing);
+    await tester.scrollUntilVisible(
+      last,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(last.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  group('background alerts', () {
+    late _FakeNotifications notifications;
+    late CycleNotifications original;
+
+    setUp(() {
+      original = CycleNotifications.instance;
+      notifications = _FakeNotifications();
+      CycleNotifications.instance = notifications;
+    });
+    tearDown(() => CycleNotifications.instance = original);
+
+    testWidgets(
+      'going to background schedules the upcoming phase ends; resume cancels',
+      (tester) async {
+        await setLargeSurface(tester);
+        await tester.pumpWidget(const MyApp());
+        await tester.pump();
+        await _setConfig(
+          tester,
+          work: '1',
+          shortBreak: '1',
+          longBreak: '2',
+          cycles: '2',
+        );
+
+        await tester.tap(find.text('Iniciar'));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 10));
+
+        await _setLifecycle(tester, _toBackground);
+        final ends = notifications.scheduled.single;
+        expect(ends, hasLength(12));
+        expect(notifications.lastWithSound, isTrue);
+
+        // Work (50 s left) -> short break 1 min -> work 1 min -> long break
+        // 2 min -> work 1 min, same chain the running timer follows.
+        expect(
+          ends.first.at.difference(clock.now()),
+          const Duration(seconds: 50),
+        );
+        final gaps = [
+          for (var i = 1; i < 5; i++) ends[i].at.difference(ends[i - 1].at),
+        ];
+        expect(gaps, const [
+          Duration(minutes: 1),
+          Duration(minutes: 1),
+          Duration(minutes: 2),
+          Duration(minutes: 1),
+        ]);
+        expect(ends.take(4).map((e) => e.message), const [
+          'Pausa curta! Descanse bastante.',
+          'Hora de focar novamente!',
+          'Pausa longa! Descanse bastante.',
+          'Hora de focar novamente!',
+        ]);
+
+        final cancelsBefore = notifications.cancels;
+        await _setLifecycle(tester, _toForeground);
+        expect(notifications.cancels, cancelsBefore + 1);
+
+        await tester.tap(find.text('Pausar'));
+        await tester.pump();
+      },
+    );
+
+    testWidgets('nothing is scheduled when the timer is not running', (
+      tester,
+    ) async {
+      await setLargeSurface(tester);
+      await tester.pumpWidget(const MyApp());
+      await tester.pump();
+
+      await _setLifecycle(tester, _toBackground);
+      expect(notifications.scheduled, isEmpty);
+      await _setLifecycle(tester, _toForeground);
+    });
   });
 }
